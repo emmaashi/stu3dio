@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
-// import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-
 export const metadata: Metadata = {
-  title: "htn",
-  description: "htn project",
+  title: "Stu3dio",
+  description: "Cinematic AI studio",
 };
 
 export default function RootLayout({
