@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { CREW } from "@/data/crewData";
 
 const PATHS: Record<string, string> = {
@@ -25,6 +26,8 @@ export default function StudioMapModal({
   onPick: (i: number) => void;
   onClose: () => void;
 }) {
+  const [hoveredPin, setHoveredPin] = useState<number | null>(null);
+
   return (
     <div className="map-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="map-modal glass">
@@ -50,11 +53,31 @@ export default function StudioMapModal({
                   left: `${worker.map.left}%`,
                   '--ax': worker.accent,
                   '--gw': worker.glow,
+                  transform: hoveredPin === i
+                    ? 'translate(-50%, -106%)'
+                    : 'translate(-50%, -100%)',
                 } as React.CSSProperties}
                 onClick={() => onPick(i)}
+                onMouseEnter={() => setHoveredPin(i)}
+                onMouseLeave={() => setHoveredPin(null)}
               >
-                <div className="pin-beam" />
-                <div className="pin-head">
+                <div
+                  className="pin-beam"
+                  style={{
+                    opacity: hoveredPin === i ? 1 : 0.8,
+                    boxShadow: hoveredPin === i
+                      ? `0 0 22px 4px color-mix(in oklab, ${worker.glowHex} 80%, transparent)`
+                      : `0 0 16px 2px color-mix(in oklab, ${worker.glowHex} 60%, transparent)`,
+                  }}
+                />
+                <div
+                  className="pin-head"
+                  style={{
+                    boxShadow: hoveredPin === i
+                      ? `0 16px 34px -6px color-mix(in oklab, ${worker.hex} 80%, transparent), 0 0 44px color-mix(in oklab, ${worker.glowHex} 70%, transparent)`
+                      : `0 12px 28px -6px color-mix(in oklab, ${worker.hex} 70%, transparent), 0 0 30px color-mix(in oklab, ${worker.glowHex} 50%, transparent)`,
+                  }}
+                >
                   <Icon name={worker.icon} size={18} />
                 </div>
                 <div className="pin-label">
