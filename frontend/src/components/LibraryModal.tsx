@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useProject } from "@/hooks/useBackendIntegration";
 
 const PATHS: Record<string, string> = {
@@ -18,10 +19,10 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
 }
 
 const REELS = [
-  { id: 'r1', title: 'The Salvage', date: 'Jun 6, 2026', dur: '0:48', scenes: 3, status: 'Final cut', accent: 'var(--director)', glow: 'var(--director-glow)', hex: '#ffb23e', poster: null },
-  { id: 'r2', title: 'Static on the Coast', date: 'Jun 2, 2026', dur: '1:12', scenes: 4, status: 'Rendered', accent: 'var(--writer)', glow: 'var(--writer-glow)', hex: '#27cbe0', poster: null },
-  { id: 'r3', title: 'The Keeper', date: 'May 28, 2026', dur: '0:36', scenes: 3, status: 'Rendered', accent: 'var(--casting)', glow: 'var(--casting-glow)', hex: '#ff4d8d', poster: null },
-  { id: 'r4', title: 'Night Shift', date: 'May 21, 2026', dur: '0:54', scenes: 3, status: 'Draft', accent: '#8b6cff', glow: '#a890ff', hex: '#8b6cff', poster: null },
+  { id: 'r1', title: 'The Salvage', date: 'Jun 6, 2026', dur: '0:48', scenes: 3, status: 'Final cut', accent: 'var(--director)', glow: 'var(--director-glow)', hex: '#ffb23e' },
+  { id: 'r2', title: 'Static on the Coast', date: 'Jun 2, 2026', dur: '1:12', scenes: 4, status: 'Rendered', accent: 'var(--writer)', glow: 'var(--writer-glow)', hex: '#27cbe0' },
+  { id: 'r3', title: 'The Keeper', date: 'May 28, 2026', dur: '0:36', scenes: 3, status: 'Rendered', accent: 'var(--casting)', glow: 'var(--casting-glow)', hex: '#ff4d8d' },
+  { id: 'r4', title: 'Night Shift', date: 'May 21, 2026', dur: '0:54', scenes: 3, status: 'Draft', accent: '#8b6cff', glow: '#a890ff', hex: '#8b6cff' },
 ];
 
 export default function LibraryModal({
@@ -36,12 +37,16 @@ export default function LibraryModal({
   onNew: () => void;
 }) {
   const project = useProject();
+  const [creating, setCreating] = useState(false);
 
   const handleNew = async () => {
+    setCreating(true);
     try {
       await project.createProject();
     } catch (e) {
       console.error('Failed to create project:', e);
+    } finally {
+      setCreating(false);
     }
     onNew();
   };
@@ -55,8 +60,9 @@ export default function LibraryModal({
             <div className="map-title">Library</div>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={handleNew}>
-              <Icon name="plus" size={16} /><span>New video</span>
+            <button className="btn btn-primary" onClick={handleNew} disabled={creating}>
+              <Icon name="plus" size={16} />
+              <span>{creating ? 'Creating…' : 'New video'}</span>
             </button>
             <button className="btn btn-ghost btn-sm" onClick={onClose}>
               <Icon name="x" size={16} /><span>Close</span>
