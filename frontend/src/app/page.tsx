@@ -122,13 +122,6 @@ export default function Home() {
 
           {/* Studio set dressing */}
           <div className="studio-set">
-            <div className="set-truss">
-              <span className="truss-light" />
-              <span className="truss-light" />
-              <span className="truss-light" />
-              <span className="truss-light" />
-              <span className="truss-light" />
-            </div>
             <div className="set-stand left"><span className="stand-head" /></div>
             <div className="set-stand right"><span className="stand-head" /></div>
             <div className="set-cam">
