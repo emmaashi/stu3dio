@@ -6,6 +6,7 @@ import { Stage, Layer, Image as KImage, Line } from "react-konva";
 import { colors } from "@/styles/colors";
 
 export type ScribbleLine = { points: number[]; color: string; size: number; erase?: boolean; tool?: "pencil" | "highlighter" | "eraser" };
+export type ScribbleExport = { toDataURL: () => string | null };
 
 export default function ScribbleEditor({
   src,
@@ -14,6 +15,7 @@ export default function ScribbleEditor({
   brushColor = "#8DFF00",
   lines,
   onChangeLines,
+  exportRef,
 }: {
   src: string;
   width?: number; // if undefined, fills parent width
@@ -21,6 +23,7 @@ export default function ScribbleEditor({
   brushColor?: string;
   lines?: ScribbleLine[];
   onChangeLines?: (l: ScribbleLine[]) => void;
+  exportRef?: { current: ScribbleExport | null };
 }) {
   const stageRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -121,10 +124,30 @@ export default function ScribbleEditor({
 
   // no text features
 
-  const exportPNG = () => {
+  // composite the image + strokes into a PNG data URL (image/png)
+  const getComposite = (): string | null => {
     const stage = stageRef.current;
-    if (!stage) return;
-    const dataURL = stage.toDataURL({ pixelRatio: 2, mimeType: "image/png" });
+    if (!stage) return null;
+    try {
+      return stage.toDataURL({ pixelRatio: 2, mimeType: "image/png" });
+    } catch (e) {
+      // tainted canvas (cross-origin image without CORS headers)
+      console.error("ScribbleEditor: composite export failed", e);
+      return null;
+    }
+  };
+
+  // expose the composite to the parent (used to send the drawing to the edit job)
+  useEffect(() => {
+    if (!exportRef) return;
+    exportRef.current = { toDataURL: getComposite };
+    return () => { if (exportRef) exportRef.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exportRef]);
+
+  const exportPNG = () => {
+    const dataURL = getComposite();
+    if (!dataURL) return;
     const a = document.createElement("a");
     a.href = dataURL;
     a.download = "scribble.png";

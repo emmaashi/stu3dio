@@ -83,6 +83,9 @@ export default function CinematicWorkerPanel({
           </button>
         </div>
 
+        {/* What this worker does — 2 sentences before the divider */}
+        <p className="wp-intro">{worker.intro}</p>
+
         {/* Content */}
         {children}
       </div>

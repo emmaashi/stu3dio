@@ -162,19 +162,7 @@ export default function Character2Page({ onClose }: { onClose?: () => void }) {
   return (
     <CinematicWorkerPanel worker={worker} onClose={handleClose}>
       <div className={`wc wc--${phase}`} style={{ overflowY: 'auto' }}>
-        {phase !== 'idle' && (
-          <div className="wc-out glass scroll">
-            {renderOutput()}
-          </div>
-        )}
-
         <div className="wc-dock">
-          {phase === 'idle' && (
-            <div className="wc-brief">
-              <p>{worker.intro}</p>
-            </div>
-          )}
-
           {!project?.currentProject && (
             <div style={{ padding: '12px 14px', background: 'rgba(255,93,93,.06)', border: '1px solid rgba(255,93,93,.18)', borderRadius: 'var(--r-sm)', color: 'var(--danger)', fontSize: 13 }}>
               No project selected. Please create or select a project first.
