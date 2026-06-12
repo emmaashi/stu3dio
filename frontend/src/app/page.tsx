@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useSceneStore } from "@/store/useSceneStore";
 import { CREW } from "@/data/crewData";
 import CinematicChar3D from "@/components/CinematicChar3D";
 import PagesOverlay from "@/components/pages/PagesOverlay";
 import StudioMapModal from "@/components/StudioMapModal";
+import CanvasModal from "@/components/CanvasModal";
 import LibraryModal from "@/components/LibraryModal";
+import { loadDemoProject } from "@/data/projectData";
+import { DEMO_PROJECT } from "@/data/demoFilm";
 
 /* ---- inline icon set ---- */
 const PATHS: Record<string, string> = {
@@ -56,8 +59,8 @@ export default function Home() {
   const [index, setIndex] = useState(2); // default director
   const [mapOpen, setMapOpen] = useState(false);
   const [libOpen, setLibOpen] = useState(false);
+  const [canvasOpen, setCanvasOpen] = useState(false);
   const [proj, setProj] = useState("Untitled — Reel 01");
-  const [clock, setClock] = useState("00:00:00:00");
   const [editing, setEditing] = useState(false);
   const [closing, setClosing] = useState(false);
 
@@ -69,21 +72,6 @@ export default function Home() {
   const worker = CREW[index];
   const prev = CREW[(index - 1 + 3) % 3];
   const next = CREW[(index + 1) % 3];
-
-  // Clock effect
-  useEffect(() => {
-    const t0 = Date.now();
-    const id = setInterval(() => {
-      const s = (Date.now() - t0) / 1000;
-      const ff = Math.floor((s * 24) % 24);
-      const ss = Math.floor(s % 60);
-      const mm = Math.floor((s / 60) % 60);
-      const hh = Math.floor(s / 3600);
-      const p = (n: number) => String(n).padStart(2, '0');
-      setClock(`${p(hh)}:${p(mm)}:${p(ss)}:${p(ff)}`);
-    }, 80);
-    return () => clearInterval(id);
-  }, []);
 
   function enter(i: number) {
     setIndex(i);
@@ -138,9 +126,6 @@ export default function Home() {
           {/* Top bar */}
           <header className="home-top">
             <div className="brand">
-              <span className="brand-mark">
-                <Icon name="aperture" size={22} />
-              </span>
               <span className="brand-word">
                 STU<em>3</em>DIO
               </span>
@@ -168,15 +153,6 @@ export default function Home() {
             </div>
 
             <div className="home-top-right">
-              <div className="tc tnum">
-                <span className="rec" />
-                {clock}
-              </div>
-              <div className="slate-board">
-                <span><em>SCENE</em>12</span>
-                <span><em>TAKE</em>03</span>
-                <span><em>ROLL</em>A</span>
-              </div>
               <button className="mapbtn" onClick={() => setLibOpen(true)} title="Library">
                 <Icon name="clapper" size={18} />
                 <span>Library</span>
@@ -304,13 +280,25 @@ export default function Home() {
         <StudioMapModal onPick={pickFromMap} onClose={() => setMapOpen(false)} />
       )}
 
-      {/* Library modal */}
+      {/* Library — pick a project to open on the canvas */}
       {libOpen && (
         <LibraryModal
-          proj={proj}
           onClose={() => setLibOpen(false)}
-          onPick={(title) => { setProj(title); setLibOpen(false); }}
-          onNew={() => { setProj('Untitled — Reel 01'); setLibOpen(false); }}
+          onOpen={() => {
+            loadDemoProject();
+            setProj(DEMO_PROJECT.title);
+            setLibOpen(false);
+            setCanvasOpen(true);
+          }}
+        />
+      )}
+
+      {/* Canvas — the opened project's pipeline */}
+      {canvasOpen && (
+        <CanvasModal
+          proj={proj}
+          onClose={() => setCanvasOpen(false)}
+          onPick={(title) => setProj(title)}
         />
       )}
     </div>

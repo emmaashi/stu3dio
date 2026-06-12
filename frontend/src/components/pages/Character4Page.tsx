@@ -140,56 +140,6 @@ export default function Character4Page({ onClose }: { onClose?: () => void }) {
   return (
     <CinematicWorkerPanel worker={worker} onClose={handleClose}>
       <div className="wc wc--idle" style={{ overflowY: 'auto' }}>
-        {/* Output area */}
-        <div className="wc-out glass scroll" style={{ minHeight: '40vh' }}>
-          {director.isLoading ? (
-            <div className="wc-working">
-              <div className="clap-load">
-                <svg width={30} height={30} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: '<path d="m4 11 16-3"/><path d="M4 11v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8Z"/><path d="m4.5 7.5 15-3 .8 3.5-15 3Z"/>' }} />
-              </div>
-              <div className="slate">AI director is thinking…</div>
-            </div>
-          ) : (
-            <div className="wo-grid">
-              {/* Response */}
-              <div className="wo-col wo-span">
-                <div className="slate" style={{ marginBottom: 8 }}>Director&apos;s response</div>
-                <p className="wo-resp">{result?.response ? parseCharacterReferences(result.response) : null}</p>
-              </div>
-              {/* Scenes */}
-              <div className="wo-col">
-                <div className="wo-colhead">
-                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: '<path d="m4 11 16-3"/><path d="M4 11v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8Z"/><path d="m4.5 7.5 15-3 .8 3.5-15 3Z"/>' }} />
-                  <span className="slate">Scenes</span>
-                </div>
-                {(result?.scene_descriptions || []).map((s, idx) => (
-                  <div className="scene-row" key={idx}>
-                    <span className="scene-n tnum">{String(idx + 1).padStart(2, '0')}</span>
-                    <div>
-                      <div className="scene-t">{parseCharacterReferences(s)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {/* Characters */}
-              <div className="wo-col">
-                <div className="wo-colhead">
-                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 5.5a3 3 0 0 1 0 5.6"/><path d="M17 14.5a6 6 0 0 1 4 5.5"/>' }} />
-                  <span className="slate">Characters</span>
-                </div>
-                <div className="cast-list">
-                  {(result?.characters || []).map((c, idx) => (
-                    <div className="cast-chip" key={idx}>
-                      <span className="cast-av" style={{ background: `linear-gradient(140deg, var(--gw), var(--ax))` }} />
-                      {parseCharacterReferences(c)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Input dock */}
         <div className="wc-dock">
           <div className="wc-field-wrap">

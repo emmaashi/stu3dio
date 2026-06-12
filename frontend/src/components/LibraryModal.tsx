@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
-import { useProject } from "@/hooks/useBackendIntegration";
+import { DEMO_PROJECT, DEMO_POSTER } from "@/data/demoFilm";
 
 const PATHS: Record<string, string> = {
   x: '<path d="m6 6 12 12M18 6 6 18"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
   play: '<path d="M7 4v16l13-8z"/>',
-  clapper: '<path d="m4 11 16-3"/><path d="M4 11v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8Z"/><path d="m4.5 7.5 15-3 .8 3.5-15 3Z"/>',
+  film: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 7.5h4M3 12h4M3 16.5h4M17 7.5h4M17 12h4M17 16.5h4"/>',
 };
 
 function Icon({ name, size = 20 }: { name: string; size?: number }) {
@@ -18,85 +16,53 @@ function Icon({ name, size = 20 }: { name: string; size?: number }) {
   );
 }
 
-const REELS = [
-  { id: 'r1', title: 'The Salvage', date: 'Jun 6, 2026', dur: '0:48', scenes: 3, status: 'Final cut', accent: 'var(--director)', glow: 'var(--director-glow)', hex: '#ffb23e' },
-  { id: 'r2', title: 'Static on the Coast', date: 'Jun 2, 2026', dur: '1:12', scenes: 4, status: 'Rendered', accent: 'var(--writer)', glow: 'var(--writer-glow)', hex: '#27cbe0' },
-  { id: 'r3', title: 'The Keeper', date: 'May 28, 2026', dur: '0:36', scenes: 3, status: 'Rendered', accent: 'var(--casting)', glow: 'var(--casting-glow)', hex: '#ff4d8d' },
-  { id: 'r4', title: 'Night Shift', date: 'May 21, 2026', dur: '0:54', scenes: 3, status: 'Draft', accent: '#8b6cff', glow: '#a890ff', hex: '#8b6cff' },
+// A project as shown in the library. For now there's one hardcoded film (Emberveil);
+// real projects can be appended to this list once the backend is connected.
+const LIBRARY = [
+  {
+    id: DEMO_PROJECT.id,
+    title: DEMO_PROJECT.title,
+    summary: DEMO_PROJECT.summary,
+    poster: DEMO_POSTER,
+    meta: "8 scenes · 6 characters · ~15 min",
+  },
 ];
 
 export default function LibraryModal({
-  proj,
   onClose,
-  onPick,
-  onNew,
+  onOpen,
 }: {
-  proj: string;
   onClose: () => void;
-  onPick: (title: string) => void;
-  onNew: () => void;
+  onOpen: (id: string) => void;
 }) {
-  const project = useProject();
-  const [creating, setCreating] = useState(false);
-
-  const handleNew = async () => {
-    setCreating(true);
-    try {
-      await project.createProject();
-    } catch (e) {
-      console.error('Failed to create project:', e);
-    } finally {
-      setCreating(false);
-    }
-    onNew();
-  };
-
   return (
-    <div className="map-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="lib-overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="lib-modal glass">
-        <div className="map-head">
-          <div>
-            <div className="slate">Your Reels</div>
-            <div className="map-title">Library</div>
+        <div className="lib-head">
+          <div className="lib-titlewrap">
+            <span className="brand-mark sm"><Icon name="film" size={18} /></span>
+            <div>
+              <div className="slate">Your projects</div>
+              <div className="lib-title">Library</div>
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={handleNew} disabled={creating}>
-              <Icon name="plus" size={16} />
-              <span>{creating ? 'Creating…' : 'New video'}</span>
-            </button>
-            <button className="btn btn-ghost btn-sm" onClick={onClose}>
-              <Icon name="x" size={16} /><span>Close</span>
-            </button>
-          </div>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>
+            <Icon name="x" size={16} /><span>Close</span>
+          </button>
         </div>
 
         <div className="lib-grid scroll">
-          {REELS.map((reel) => (
-            <button
-              key={reel.id}
-              className="reel-card"
-              style={{ '--ax': reel.accent, '--gw': reel.glow } as React.CSSProperties}
-              onClick={() => onPick(reel.title)}
-            >
-              <div className="reel-poster">
-                <div className="reel-blank">
-                  <Icon name="clapper" size={36} />
-                </div>
-                <div className="reel-grade" />
-                <div className="reel-play">
-                  <Icon name="play" size={20} />
-                </div>
-                <div className="reel-dur">{reel.dur}</div>
+          {LIBRARY.map((p) => (
+            <button key={p.id} className="lib-card" onClick={() => onOpen(p.id)}>
+              <div className="lib-poster">
+                <img src={p.poster} alt={p.title} draggable={false} />
+                <div className="lib-poster-grade" />
+                <div className="lib-play"><Icon name="play" size={22} /></div>
               </div>
-              <div className="reel-meta">
-                <div className="reel-title">{reel.title}</div>
-                <div className="reel-sub">
-                  <div className="reel-status">
-                    <span className="reel-statdot" style={{ background: reel.hex }} />
-                    {reel.status}
-                  </div>
-                  <div className="reel-date">{reel.date}</div>
-                </div>
+              <div className="lib-meta">
+                <div className="lib-card-title">{p.title}</div>
+                <div className="lib-card-sum">{p.summary}</div>
+                <div className="slate lib-card-meta">{p.meta}</div>
               </div>
             </button>
           ))}

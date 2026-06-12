@@ -3,6 +3,7 @@ import { setCurrentProject } from './characterData';
 import { setCurrentProject as setScriptProject, loadProjectScript } from './scriptData';
 import { setDirectorProject, loadConversationHistory, loadConversationContext } from './directorData';
 import type { Project } from '../types/backend';
+import { DEMO_PROJECT_ID, DEMO_PROJECT, DEMO_COMPLETE_STATUS } from './demoFilm';
 
 // Global project state
 const projectState = {
@@ -246,7 +247,18 @@ export async function getCompleteProjectStatus(): Promise<{
     throw new Error('No project selected');
   }
 
+  // Hardcoded demo film — return the fixture without any backend call.
+  if (projectState.currentProject.id === DEMO_PROJECT_ID) {
+    return DEMO_COMPLETE_STATUS;
+  }
+
   return projectApi.getComplete(projectState.currentProject.id);
+}
+
+// Load the hardcoded demo film as the active project (in-memory, no network).
+export function loadDemoProject(): Project {
+  projectState.currentProject = DEMO_PROJECT;
+  return DEMO_PROJECT;
 }
 
 export function isProjectLoading(): boolean {

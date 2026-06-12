@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSceneStore } from "@/store/useSceneStore";
-import ScribbleEditor from "@/components/ScribbleEditor";
+import ScribbleEditor, { type ScribbleExport } from "@/components/ScribbleEditor";
 import {
   getScribblesForImage, setScribblesForImage,
   getCurrentCharacterGallaryIndex, setCurrentCharacterGallaryIndex,
@@ -56,6 +56,7 @@ export default function Character3Page({ onClose }: { onClose?: () => void }) {
 
   const [index, setIndex] = useState(getCurrentCharacterGallaryIndex());
   const [scribblesByIndex, setScribblesByIndex] = useState<Record<number, any[]>>({});
+  const scribbleExportRef = useRef<ScribbleExport | null>(null);
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -139,28 +140,35 @@ export default function Character3Page({ onClose }: { onClose?: () => void }) {
 
   async function handleSubmitCurrent() {
     const prompt = input.trim();
-    if (!prompt) return;
+    const hasScribbles = (scribblesByIndex[index]?.length || 0) > 0;
+    // allow submitting with a drawing alone (e.g. draw a hat) or with text
+    if (!prompt && !hasScribbles) return;
     setInput("");
     setIsProcessing(true);
     setEntryLoading(activeTab, index, true);
     try {
+      // When the user has drawn on the image, burn the strokes into the source so the
+      // model actually sees the annotation (e.g. a drawn hat). Falls back to the raw
+      // image URL if compositing fails (e.g. a tainted cross-origin canvas).
+      const composite = hasScribbles ? scribbleExportRef.current?.toDataURL() ?? null : null;
+      const editPrompt = prompt || 'Incorporate the drawn annotations into the image, blending them naturally.';
       let resp: { file_path: string; description: string };
       if (project?.currentProject && current?.image && hasBackendData) {
         const jobId = await imageEditing.editImage({
           projectId: project.currentProject.id,
-          sourceUrl: current.image,
-          editPrompt: prompt,
-          metadata: { source: 'character_gallery', tab: activeTab, index },
+          sourceUrl: composite || current.image,
+          editPrompt,
+          metadata: { source: 'character_gallery', tab: activeTab, index, annotated: !!composite },
         });
         console.log('Image editing job started:', jobId);
         resp = { file_path: current.image, description: current.description + "\n\nEditing in progress..." };
       } else if (projectId) {
         const { sendImageWithScribbles } = await import("@/lib/imageAgent");
-        const payload = { prompt, imageSrc: current?.image || "", lines: scribblesByIndex[index] || [], projectId };
+        const payload = { prompt: editPrompt, imageSrc: composite || current?.image || "", lines: scribblesByIndex[index] || [], projectId };
         resp = await sendImageWithScribbles(payload);
       } else {
         await new Promise((r) => setTimeout(r, 600));
-        resp = { file_path: current?.image || "", description: (current?.description ? current.description + "\n\n" : "") + `Applied change: ${prompt}` };
+        resp = { file_path: current?.image || "", description: (current?.description ? current.description + "\n\n" : "") + `Applied change: ${editPrompt}` };
       }
       useSceneStore.getState().setCompleted("character_3", true);
       if (!hasBackendData) updateCharacterGalleryData(activeTab, index, resp.file_path, resp.description);
@@ -287,6 +295,7 @@ export default function Character3Page({ onClose }: { onClose?: () => void }) {
             <>
               <ScribbleEditor
                 src={getImageUrl(current?.image || '')}
+                exportRef={scribbleExportRef}
                 lines={scribblesByIndex[index] || []}
                 onChangeLines={(l) => {
                   setScribblesByIndex((prev) => ({ ...prev, [index]: l }));
