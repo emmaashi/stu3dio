@@ -140,7 +140,7 @@ export async function loadConversationHistory(): Promise<DirectorMessage[]> {
 
   try {
     const response = await directorApi.getMessages(directorState.conversationId);
-    const messages: DirectorMessage[] = response.messages.map((msg: any) => ({
+    const messages: DirectorMessage[] = response.messages.map((msg: any): DirectorMessage => ({
       id: msg.id || crypto.randomUUID(),
       type: msg.user_query ? 'user' : 'director',
       content: msg.user_query || msg.director_response || '',

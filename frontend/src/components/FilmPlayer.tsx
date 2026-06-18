@@ -17,6 +17,9 @@ export default function FilmPlayer({
   autoplay = false,
   initialRate = 1
 }: FilmPlayerProps) {
+  // YouTube-hosted demo films (e.g. Echo Hunter) play via an embedded iframe.
+  const youtubeEmbed = src && /youtube\.com\/embed\//.test(src) ? src : null;
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const progressRef = useRef<HTMLInputElement>(null);
@@ -39,7 +42,7 @@ export default function FilmPlayer({
 
   const { rate, setPlaybackRate, cycleRate, allowedRates } = usePlaybackRate(initialRate);
   
-  useHls(src, videoRef);
+  useHls(youtubeEmbed ? null : src, videoRef);
 
   // Timer to hide center button after 3 seconds of inactivity
   useEffect(() => {
@@ -371,6 +374,24 @@ export default function FilmPlayer({
     setShowExportConfirm(false);
   }, []);
 
+  // YouTube-hosted films play via an embedded iframe (the native <video> player
+  // can't stream YouTube). The surrounding overlay supplies the close/title chrome.
+  if (youtubeEmbed) {
+    const sep = youtubeEmbed.includes("?") ? "&" : "?";
+    const embedSrc = `${youtubeEmbed}${sep}autoplay=${autoplay ? 1 : 0}&rel=0&modestbranding=1`;
+    return (
+      <div className="w-full h-screen bg-black">
+        <iframe
+          src={embedSrc}
+          className="w-full h-full"
+          title="Film"
+          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
   if (!src) {
     return (
       <div className="flex items-center justify-center h-screen bg-black">
@@ -518,50 +539,50 @@ export default function FilmPlayer({
         </div>
 
         {/* Control buttons */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
             {/* Play/Pause */}
             <button
               onClick={togglePlay}
-              className="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300 transition-colors duration-200"
+              className="flex items-center justify-center w-9 h-9 text-white/90 hover:text-white focus:outline-none transition-colors"
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isPlaying ? (
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
                 </svg>
               ) : (
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z"/>
                 </svg>
               )}
             </button>
 
             {/* Time display */}
-            <span className="text-white text-sm font-mono tracking-wider">
+            <span className="text-white/90 text-[13px] tabular-nums tracking-wide">
               {formatTime(currentTime)} / {formatTime(duration)}
             </span>
 
             {/* Volume control */}
-            <div className="flex items-center space-x-3 group/volume">
+            <div className="flex items-center gap-2 group/volume">
               <button
                 onClick={toggleMute}
-                className="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300 transition-colors duration-200"
+                className="flex items-center justify-center w-9 h-9 text-white/90 hover:text-white focus:outline-none transition-colors"
                 aria-label={isMuted ? "Unmute" : "Mute"}
               >
                 {isMuted || volume === 0 ? (
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
                   </svg>
                 ) : (
-                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
                   </svg>
                 )}
               </button>
-              
+
               {/* Volume slider container */}
-              <div className="relative w-32 h-2 bg-white/20 rounded-full opacity-0 group-hover/volume:opacity-100 transition-opacity duration-200">
+              <div className="relative w-24 h-2 bg-white/20 rounded-full opacity-0 group-hover/volume:opacity-100 transition-opacity duration-200">
                 <input
                   ref={volumeRef}
                   type="range"
@@ -574,25 +595,25 @@ export default function FilmPlayer({
                   aria-label="Volume"
                 />
                 {/* Volume level indicator */}
-                <div 
+                <div
                   className="absolute top-0 left-0 h-2 bg-white rounded-full pointer-events-none"
                   style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
                 />
               </div>
-              
+
               {/* Volume percentage display */}
-              <span className="text-white text-xs font-mono w-8 text-right">
+              <span className="text-white/70 text-xs tabular-nums w-9 text-right">
                 {Math.round((isMuted ? 0 : volume) * 100)}%
               </span>
             </div>
           </div>
 
-          <div className="flex items-center space-x-6">
+          <div className="flex items-center gap-2">
             {/* Playback speed */}
             <select
               value={rate}
               onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
-              className="bg-white/10 backdrop-blur-sm text-white text-sm rounded-lg px-3 py-2 border border-white/20 focus:outline-none focus:ring-2 focus:ring-white/50 transition-all duration-200"
+              className="h-9 rounded-btn bg-white/10 backdrop-blur-sm text-white text-[13px] px-2.5 border border-white/15 focus:outline-none focus:border-white/40 transition-colors cursor-pointer"
               aria-label="Playback speed"
             >
               {allowedRates.map((r) => (
@@ -605,10 +626,10 @@ export default function FilmPlayer({
             {/* Picture-in-Picture */}
             <button
               onClick={togglePictureInPicture}
-              className="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300 transition-colors duration-200"
+              className="flex items-center justify-center w-9 h-9 text-white/90 hover:text-white focus:outline-none transition-colors"
               aria-label={isPictureInPicture ? "Exit Picture-in-Picture" : "Enter Picture-in-Picture"}
             >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M19 7h-8v6h8V7zm-2 4h-4V9h4v2zm4-8H3C1.9 3 1 3.9 1 5v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H3V5h18v14z"/>
               </svg>
             </button>
@@ -616,15 +637,15 @@ export default function FilmPlayer({
             {/* Fullscreen */}
             <button
               onClick={toggleFullscreen}
-              className="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300 transition-colors duration-200"
+              className="flex items-center justify-center w-9 h-9 text-white/90 hover:text-white focus:outline-none transition-colors"
               aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
             >
               {isFullscreen ? (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>
                 </svg>
               ) : (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
                 </svg>
               )}
@@ -634,21 +655,20 @@ export default function FilmPlayer({
             <button
               onClick={showExportConfirmation}
               disabled={isExporting || !src}
-              className="text-white hover:text-gray-300 focus:outline-none focus:text-gray-300 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center w-9 h-9 text-white/90 hover:text-white focus:outline-none transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               aria-label={isExporting ? "Exporting video..." : "Export video"}
             >
               {isExporting ? (
-                <svg className="w-6 h-6 animate-spin" fill="none" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                 </svg>
               ) : (
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z"/>
                 </svg>
               )}
             </button>
-
           </div>
         </div>
       </div>

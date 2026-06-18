@@ -21,7 +21,7 @@ export default function ScenePage() {
         setLoading(true);
         const sceneData = await fetchSceneDetails(sceneId);
         if (sceneData) {
-          setScene(sceneData);
+          setScene(sceneData as unknown as Scene);
         } else {
           setError('Scene not found');
         }

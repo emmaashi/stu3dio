@@ -15,7 +15,11 @@ export class ApiError extends Error {
 }
 
 export function createApiClient(options: ApiClientOptions = {}) {
-  const baseUrl = options.baseUrl || process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+  const baseUrl =
+    options.baseUrl ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    'http://localhost:5000';
   const defaultHeaders: Record<string, string> = {
     'Accept': 'application/json',
     ...options.headers,

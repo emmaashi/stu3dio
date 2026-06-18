@@ -1,306 +1,305 @@
 "use client";
 
-import { useState } from "react";
-import { useSceneStore } from "@/store/useSceneStore";
-import { CREW } from "@/data/crewData";
-import CinematicChar3D from "@/components/CinematicChar3D";
-import PagesOverlay from "@/components/pages/PagesOverlay";
-import StudioMapModal from "@/components/StudioMapModal";
-import CanvasModal from "@/components/CanvasModal";
-import LibraryModal from "@/components/LibraryModal";
-import { loadDemoProject } from "@/data/projectData";
-import { DEMO_PROJECT } from "@/data/demoFilm";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { createNewProject } from "@/data/projectData";
+import { listDemos } from "@/data/demos";
+import { HP_POSTER } from "@/data/hpFilm";
+import {
+  getRecents,
+  recordRecent,
+  removeRecent,
+  isDemoHidden,
+  setDemoHidden,
+  type RecentProject,
+} from "@/lib/recents";
+import { Icon } from "@/components/studio/Icon";
+import { cn } from "@/lib/utils";
 
-/* ---- inline icon set ---- */
-const PATHS: Record<string, string> = {
-  aperture: '<circle cx="12" cy="12" r="9"/><path d="M12 3v9l7.5 4.3M21 12h-9L4.5 7.7M12 21v-9L4.5 16.3"/>',
-  pencil: '<path d="M4 20h4l10-10-4-4L4 16v4Z"/><path d="m14 6 4 4"/>',
-  map: '<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/>',
-  clapper: '<path d="m4 11 16-3"/><path d="M4 11v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8Z"/><path d="m4.5 7.5 15-3 .8 3.5-15 3Z"/>',
-  arrowL: '<path d="m14 6-6 6 6 6"/>',
-  arrowR: '<path d="m10 6 6 6-6 6"/>',
-  play: '<path d="M7 4v16l13-8z"/>',
-  megaphone: '<path d="m3 11 14-7v15L3 13z"/><path d="M3 11v3a1 1 0 0 0 1 1h2"/><path d="M8 14v3a2 2 0 0 0 4 0v-1"/>',
-  headphones: '<path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="2" y="13" width="5" height="8" rx="1.5"/><rect x="17" y="13" width="5" height="8" rx="1.5"/>',
-  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 16-5-5L5 21"/>',
+type View = "recents" | "drafts" | "trash";
+
+type Card = {
+  id: string;
+  title: string;
+  description: string;
+  meta: string;
+  poster?: string;
+  demo?: boolean;
 };
 
-function Icon({ name, size = 20 }: { name: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-      dangerouslySetInnerHTML={{ __html: PATHS[name] || '' }} />
-  );
-}
-
-/* Peek placeholder (clay silhouette, no extra GL context) */
-function PeekFigure({ worker }: { worker: typeof CREW[0] }) {
-  return (
-    <div
-      className="cstage cstage--bare"
-      style={{ '--gw': worker.glow, '--ax': worker.accent } as React.CSSProperties}
-    >
-      <div className="cstage-gel" />
-      <div
-        className="cstage-fig placeholder"
-        style={{ '--ax': worker.accent, '--gw': worker.glow } as React.CSSProperties}
-      >
-        <div className="clay-fig">
-          <span className="clay-head" />
-          <span className="clay-body" />
-        </div>
-      </div>
-      <div className="cstage-floor" />
-    </div>
-  );
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.round(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
 }
 
 export default function Home() {
-  const [index, setIndex] = useState(2); // default director
-  const [mapOpen, setMapOpen] = useState(false);
-  const [libOpen, setLibOpen] = useState(false);
-  const [canvasOpen, setCanvasOpen] = useState(false);
-  const [proj, setProj] = useState("Untitled — Reel 01");
-  const [editing, setEditing] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const router = useRouter();
+  const [view, setView] = useState<View>("recents");
+  const [recents, setRecents] = useState<RecentProject[]>([]);
+  const [hiddenDemoIds, setHiddenDemoIds] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; card: Card } | null>(
+    null
+  );
 
-  const selectedPageId = useSceneStore((s) => s.selectedPageId);
-  const openPage = useSceneStore((s) => s.openPage);
-  const resetSelectionAndCamera = useSceneStore((s) => s.resetSelectionAndCamera);
+  useEffect(() => {
+    setRecents(getRecents());
+    setHiddenDemoIds(
+      listDemos().filter((d) => isDemoHidden(d.id)).map((d) => d.id)
+    );
+  }, []);
 
-  const workerOpen = selectedPageId !== null;
-  const worker = CREW[index];
-  const prev = CREW[(index - 1 + 3) % 3];
-  const next = CREW[(index + 1) % 3];
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
 
-  function enter(i: number) {
-    setIndex(i);
-    setClosing(false);
-    openPage(CREW[i].pageId);
+  function deleteCard(card: Card) {
+    if (card.demo) {
+      setDemoHidden(card.id, true);
+      setHiddenDemoIds((prev) =>
+        prev.includes(card.id) ? prev : [...prev, card.id]
+      );
+    } else {
+      removeRecent(card.id);
+      setRecents(getRecents());
+    }
+    setMenu(null);
   }
 
-  function closeWorker() {
-    setClosing(true);
-    setTimeout(() => {
-      resetSelectionAndCamera();
-      setClosing(false);
-    }, 280);
+  async function createFilm() {
+    if (creating) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const project = await createNewProject({
+        title: "Untitled film",
+        summary: "",
+        plot: "",
+      });
+      recordRecent({ id: project.id, title: project.title, summary: "", draft: true });
+      router.push(`/studio?project=${project.id}`);
+    } catch {
+      setError("Couldn't create a film. Try reloading.");
+      setCreating(false);
+    }
   }
 
-  function pickFromMap(i: number) {
-    setMapOpen(false);
-    enter(i);
+  function open(c: Card) {
+    if (!c.demo) recordRecent({ id: c.id, title: c.title, draft: true });
+    router.push(`/studio?project=${c.id}`);
   }
 
-  const go = (d: number) => setIndex((index + d + 3) % 3);
+  function openMenuAt(clientX: number, clientY: number, card: Card) {
+    // keep the menu inside the viewport
+    const x = Math.min(clientX, window.innerWidth - 168);
+    const y = Math.min(clientY, window.innerHeight - 110);
+    setMenu({ x, y, card });
+  }
+
+  const demoCards: Card[] = listDemos()
+    .filter((d) => !hiddenDemoIds.includes(d.id))
+    .map((d) => ({
+      id: d.id,
+      title: d.project.title,
+      description: d.project.summary,
+      meta: "Demo film",
+      poster: d.poster,
+      demo: true,
+    }));
+  const recentCards: Card[] = recents.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.summary?.trim() || "Draft — not started yet.",
+    meta: `Edited ${relativeTime(r.updatedAt)}`,
+    // Mock turns every film into Harry Potter, so fall back to the HP poster
+    // for any draft that hasn't captured its own thumbnail yet.
+    poster: r.poster ?? HP_POSTER,
+  }));
+
+  const cards: Card[] =
+    view === "trash"
+      ? []
+      : view === "drafts"
+      ? recentCards
+      : [...demoCards, ...recentCards];
+
+  const navItems: { id: View; label: string; icon: string }[] = [
+    { id: "recents", label: "Recents", icon: "clock" },
+    { id: "drafts", label: "Drafts", icon: "drafts" },
+    { id: "trash", label: "Trash", icon: "trash" },
+  ];
+
+  const VIEW_META: Record<View, { title: string; sub: string }> = {
+    recents: { title: "Recents", sub: "Pick up where you left off." },
+    drafts: { title: "Drafts", sub: "Films you've started." },
+    trash: { title: "Trash", sub: "Films you've deleted." },
+  };
+  const meta = VIEW_META[view];
 
   return (
-    <div className="app">
-      <div className="grain animate" />
-      <div className="vignette" />
-
-      {/* Home layer */}
-      <div
-        className={`layer-home${workerOpen ? ' dimmed' : ''}`}
-        style={{ '--ax': worker.accent, '--gw': worker.glow } as React.CSSProperties}
-      >
-        <div className="home">
-          <div className="home-glow" />
-          <div className="home-grid" />
-
-          {/* Studio set dressing */}
-          <div className="studio-set">
-            <div className="set-stand left"><span className="stand-head" /></div>
-            <div className="set-stand right"><span className="stand-head" /></div>
-            <div className="set-cam">
-              <span className="cam-body">
-                <span className="cam-reel" />
-                <span className="cam-reel b" />
-              </span>
-              <span className="cam-lens" />
-            </div>
-            <div className="set-boom"><span className="boom-mic" /></div>
-            <div className="set-filmstrip" />
-          </div>
-
-          {/* Top bar */}
-          <header className="home-top">
-            <div className="brand">
-              <span className="brand-word">
-                STU<em>3</em>DIO
-              </span>
-            </div>
-
-            <div className="proj">
-              <div className="slate">Production</div>
-              {editing ? (
-                <input
-                  className="proj-input"
-                  defaultValue={proj}
-                  autoFocus
-                  onBlur={(e) => { setProj(e.target.value.trim() || proj); setEditing(false); }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') e.currentTarget.blur();
-                    if (e.key === 'Escape') setEditing(false);
-                  }}
-                />
-              ) : (
-                <button className="proj-name" onClick={() => setEditing(true)} title="Rename">
-                  {proj}
-                  <Icon name="pencil" size={13} />
-                </button>
+    <div className="grid grid-cols-[248px_1fr] h-screen bg-surface-0 text-ink">
+      {/* Sidebar */}
+      <aside className="flex flex-col gap-[18px] px-4 py-5 border-r border-hair bg-surface-1">
+        <div className="px-1.5 pt-1 pb-0.5">
+          <span className="text-[19px] font-extrabold tracking-[-.01em] text-ink">
+            STU<em className="not-italic text-accent">3</em>DIO
+          </span>
+        </div>
+        <button
+          className="flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-sm font-semibold text-left text-accent-ink bg-[linear-gradient(180deg,color-mix(in_oklab,var(--accent)_92%,#fff_8%),var(--accent))] transition-[filter] duration-200 hover:brightness-105 disabled:opacity-70 disabled:cursor-default"
+          onClick={createFilm}
+          disabled={creating}
+        >
+          <Icon name="plus" size={16} />
+          <span>{creating ? "Creating…" : "New film"}</span>
+        </button>
+        <nav className="flex flex-col gap-0.5 mt-0.5">
+          {navItems.map((n) => (
+            <button
+              key={n.id}
+              className={cn(
+                "flex items-center gap-[11px] px-[11px] py-[9px] rounded-[10px] text-sm font-medium text-left transition-colors duration-200",
+                view === n.id
+                  ? "bg-glass-2 text-ink"
+                  : "text-ink-2 hover:bg-glass hover:text-ink"
               )}
-            </div>
+              onClick={() => setView(n.id)}
+            >
+              <Icon name={n.icon} size={17} />
+              <span>{n.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
 
-            <div className="home-top-right">
-              <button className="mapbtn" onClick={() => setLibOpen(true)} title="Library">
-                <Icon name="clapper" size={18} />
-                <span>Library</span>
-              </button>
-              <button className="mapbtn" onClick={() => setMapOpen(true)} title="Studio map">
-                <Icon name="map" size={20} />
-                <span>Studio Map</span>
-              </button>
+      {/* Main */}
+      <main className="scroll overflow-y-auto pt-10 pb-[72px] px-[clamp(20px,4vw,56px)]">
+        <div className="max-w-[1200px] mx-auto">
+          {error && (
+            <div className="mt-4 px-[14px] py-[10px] rounded-[10px] text-[13px] text-[#ffb4b4] bg-[rgba(255,80,80,.08)] border border-[rgba(255,80,80,.25)]">
+              {error}
             </div>
+          )}
+
+          <header className="mb-[26px]">
+            <h1 className="text-2xl font-bold tracking-[-.02em] text-ink">
+              {meta.title}
+            </h1>
+            <p className="mt-1.5 text-sm text-ink-3">{meta.sub}</p>
           </header>
 
-          {/* Stage */}
-          <div className="home-stage">
-            <button className="navarrow left" onClick={() => go(-1)} aria-label="Previous">
-              <Icon name="arrowL" size={26} />
-            </button>
-
-            {/* Peek left */}
-            <div className="peek peek-l" onClick={() => go(-1)} key={'pl-' + prev.id}>
-              <PeekFigure worker={prev} />
+          {cards.length === 0 ? (
+            <div className="px-1 py-7 text-sm text-ink-3">
+              {view === "trash"
+                ? "Trash is empty."
+                : "No films yet — start one with New film."}
             </div>
-
-            {/* Hero */}
-            <div className="hero-slot" key={worker.id}>
-              <div
-                className="cstage letterbox"
-                style={{ '--gw': worker.glow, '--ax': worker.accent } as React.CSSProperties}
-              >
-                <div className="cstage-gel" />
-                <div className="cstage-spot" />
-                <div className="cstage-3d">
-                  <CinematicChar3D worker={worker} interactive={true} />
-                </div>
-                <div className="cstage-floor" />
-                <div className="cstage-grade" />
-                <div className="cstage-vig" />
-              </div>
-            </div>
-
-            {/* Peek right */}
-            <div className="peek peek-r" onClick={() => go(1)} key={'pr-' + next.id}>
-              <PeekFigure worker={next} />
-            </div>
-
-            <button className="navarrow right" onClick={() => go(1)} aria-label="Next">
-              <Icon name="arrowR" size={26} />
-            </button>
-          </div>
-
-          {/* Call sheet */}
-          <div
-            className="callsheet glass"
-            key={'cs-' + worker.id}
-            style={{ '--accent': worker.accent, '--glow': worker.glow, '--ax': worker.accent } as React.CSSProperties}
-          >
-            <div className="cs-head">
-              <div className="cs-icon">
-                <Icon name={worker.icon} size={22} />
-              </div>
-              <div>
+          ) : (
+            <div className="grid gap-x-[22px] gap-y-6 grid-cols-[repeat(auto-fill,minmax(252px,1fr))]">
+              {cards.map((c) => (
                 <div
-                  className="slate"
-                  style={{ color: 'color-mix(in oklab, var(--ax) 80%, var(--ink-3))' }}
+                  key={c.id}
+                  className="group flex flex-col text-left overflow-hidden rounded-[12px] cursor-pointer bg-surface-1 border border-hair transition-all duration-200 ease-cine hover:-translate-y-[3px] hover:border-white/20 hover:shadow-[0_16px_36px_-18px_rgba(0,0,0,.75)]"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => open(c)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openMenuAt(e.clientX, e.clientY, c);
+                  }}
                 >
-                  {worker.slate}
+                  <div className="relative aspect-[16/10] bg-surface-2 overflow-hidden">
+                    {c.poster ? (
+                      <img
+                        src={c.poster}
+                        alt={c.title}
+                        draggable={false}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center text-ink-4 bg-surface-2 [background-image:radial-gradient(120%_130%_at_50%_0%,rgba(255,255,255,.05),transparent_62%)]">
+                        <Icon name="film" size={24} />
+                      </div>
+                    )}
+                    <button
+                      className="absolute top-2 right-2 w-7 h-7 grid place-items-center rounded-btn text-white bg-black/45 border border-white/[.18] backdrop-blur-md opacity-0 -translate-y-0.5 transition-[opacity,transform] duration-200 group-hover:opacity-100 group-hover:translate-y-0 hover:bg-black/65"
+                      aria-label="More"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        openMenuAt(r.right - 4, r.bottom + 4, c);
+                      }}
+                    >
+                      <Icon name="dots" size={16} />
+                    </button>
+                  </div>
+                  <div className="px-[15px] pt-[13px] pb-[15px] border-t border-hair-2">
+                    <div className="text-[15px] font-semibold tracking-[-.01em] text-ink truncate">
+                      {c.title}
+                    </div>
+                    <div className="mt-1.5 text-[13px] leading-normal text-ink-2 min-h-[38px] line-clamp-2">
+                      {c.description}
+                    </div>
+                    <div className="mt-2.5 text-xs text-ink-4">{c.meta}</div>
+                  </div>
                 </div>
-                <div className="cs-name">
-                  {worker.role}
-                  <span className="cs-sub">{worker.name}</span>
-                </div>
-              </div>
-              <div className="cs-room slate">
-                <svg width={13} height={13} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dangerouslySetInnerHTML={{ __html: '<path d="M12 21s7-6.4 7-12a7 7 0 1 0-14 0c0 5.6 7 12 7 12Z"/><circle cx="12" cy="9" r="2.6"/>' }} />
-                {worker.room}
-              </div>
+              ))}
             </div>
-            <p className="cs-intro">{worker.intro}</p>
-            <div className="cs-foot">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{
-                  width: 7, height: 7, borderRadius: 99, background: worker.hex,
-                  boxShadow: `0 0 0 3px color-mix(in oklab, ${worker.hex} 22%, transparent)`,
-                  animation: 'pulse 2.4s var(--ease) infinite', display: 'inline-block',
-                }} />
-                <span className="slate" style={{ color: 'var(--ink-2)' }}>On set · ready</span>
-              </div>
-              <button
-                className="btn btn-primary"
-                style={{ '--accent': worker.accent } as React.CSSProperties}
-                onClick={() => enter(index)}
-              >
-                <Icon name="play" size={18} />
-                <span>Step onto set</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Crew rail */}
-          <div className="crew-rail">
-            {CREW.map((c, i) => (
-              <button
-                key={c.id}
-                className={`rail-dot${i === index ? ' on' : ''}`}
-                style={{ '--ax': c.accent } as React.CSSProperties}
-                onClick={() => setIndex(i)}
-                title={c.role}
-              >
-                <Icon name={c.icon} size={16} />
-                <span>{c.role}</span>
-              </button>
-            ))}
-          </div>
+          )}
         </div>
-      </div>
+      </main>
 
-      {/* Worker layer */}
-      {(workerOpen || closing) && (
-        <div className={`layer-worker${closing ? ' closing' : ''}`}>
-          <PagesOverlay onClose={closeWorker} />
-        </div>
-      )}
-
-      {/* Map modal */}
-      {mapOpen && (
-        <StudioMapModal onPick={pickFromMap} onClose={() => setMapOpen(false)} />
-      )}
-
-      {/* Library — pick a project to open on the canvas */}
-      {libOpen && (
-        <LibraryModal
-          onClose={() => setLibOpen(false)}
-          onOpen={() => {
-            loadDemoProject();
-            setProj(DEMO_PROJECT.title);
-            setLibOpen(false);
-            setCanvasOpen(true);
-          }}
-        />
-      )}
-
-      {/* Canvas — the opened project's pipeline */}
-      {canvasOpen && (
-        <CanvasModal
-          proj={proj}
-          onClose={() => setCanvasOpen(false)}
-          onPick={(title) => setProj(title)}
-        />
-      )}
+      <AnimatePresence>
+        {menu && (
+          <>
+            <div
+              className="fixed inset-0 z-[79]"
+              onClick={() => setMenu(null)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenu(null);
+              }}
+            />
+            <motion.div
+              className="fixed z-[80] min-w-[160px] p-[5px] rounded-[10px] bg-glass-2 border border-hair shadow-[0_18px_44px_rgba(0,0,0,.5)] backdrop-blur-xl origin-top-left"
+              style={{ left: menu.x, top: menu.y }}
+              initial={{ opacity: 0, scale: 0.94 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.94 }}
+              transition={{ duration: 0.12, ease: [0.22, 0.61, 0.36, 1] }}
+            >
+              <button
+                className="flex w-full items-center gap-[9px] px-[11px] py-2 rounded-[6px] text-[13px] text-left text-ink hover:bg-glass"
+                onClick={() => {
+                  open(menu.card);
+                  setMenu(null);
+                }}
+              >
+                <Icon name="play" size={14} />
+                <span>Open</span>
+              </button>
+              <button
+                className="flex w-full items-center gap-[9px] px-[11px] py-2 rounded-[6px] text-[13px] text-left text-[#ff7a7a] hover:bg-[rgba(255,90,90,.1)]"
+                onClick={() => deleteCard(menu.card)}
+              >
+                <Icon name="trash" size={14} />
+                <span>Delete</span>
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
