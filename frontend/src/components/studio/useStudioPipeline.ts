@@ -22,7 +22,7 @@ import {
 } from "@/data/characterData";
 import { projectApi, jobApi } from "@/utils/api";
 import { useBackendStore } from "@/store/backendStore";
-import { getDemo } from "@/data/demos";
+import { getDemo } from "@/films";
 import {
   EMPTY_GRAPH,
   type StudioGraph,
@@ -100,7 +100,7 @@ function toGraph(
 export type StudioActions = {
   sendDirector: (text: string) => Promise<void>;
   generateCast: () => Promise<void>;
-  enhanceAndGenerateScenes: () => Promise<void>;
+  enhanceAndGenerateScenes: (direction?: string) => Promise<void>;
   editAsset: (
     node: { key: string; refId?: string; media?: string },
     prompt: string,
@@ -267,7 +267,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
     [poll]
   );
 
-  const enhanceAndGenerateScenes = useCallback(async () => {
+  const enhanceAndGenerateScenes = useCallback(async (direction?: string) => {
     mark("scenes", true);
     try {
       const cur = getCurrentProject();
@@ -281,8 +281,15 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
         }
       }
       const basePlot = cur.plot || cur.summary || "";
+      // The user's scene direction rides along in base_plot, which the backend's
+      // script enhancement feeds into the scene-breakdown prompt (and on into
+      // each scene's plot_context).
+      const dir = direction?.trim();
+      const plotForScenes = dir
+        ? `${basePlot}\n\nDirector's notes for the scenes:\n${dir}`
+        : basePlot;
       try {
-        await enhanceScript(basePlot, chars);
+        await enhanceScript(plotForScenes, chars);
       } catch (e) {
         console.error("script enhancement failed", e);
       }

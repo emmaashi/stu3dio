@@ -14,10 +14,12 @@ import LayersPanel from "@/components/studio/LayersPanel";
 import AssetPanel from "@/components/studio/AssetPanel";
 import PromptDock from "@/components/studio/PromptDock";
 import StepRail from "@/components/studio/StepRail";
+import NewFilmHero from "@/components/studio/NewFilmHero";
 import FinalizeModal from "@/components/studio/FinalizeModal";
+import ScenesModal from "@/components/studio/ScenesModal";
 import { Icon } from "@/components/studio/Icon";
 import { resolveSelected } from "@/components/studio/types";
-import { isDemoId } from "@/data/demos";
+import { isDemoId } from "@/films";
 import { recordRecent } from "@/lib/recents";
 import FilmPlayer from "@/components/FilmPlayer";
 import { Button } from "@/components/studio/Button";
@@ -34,6 +36,11 @@ function StudioWorkspace() {
   const { graph, ready, initError, directorLog, busy, mediaVersion, actions } =
     useStudioPipeline(projectId, isDemo);
 
+  // A brand-new film (no cast or scenes yet) shows the centered "start your
+  // film" composer instead of the empty pipeline board.
+  const boardEmpty =
+    !isDemo && graph.characters.length === 0 && graph.scenes.length === 0;
+
   const player = useStudioStore((s) => s.player);
   const openPlayer = useStudioStore((s) => s.openPlayer);
   const closePlayer = useStudioStore((s) => s.closePlayer);
@@ -45,11 +52,14 @@ function StudioWorkspace() {
   const loadCustomGraph = useCustomGraphStore((s) => s.load);
 
   const [editingTitle, setEditingTitle] = useState(false);
-  const [assetOpen, setAssetOpen] = useState(true);
+  const [assetOpen, setAssetOpen] = useState(false);
+  const [scenesOpen, setScenesOpen] = useState(false);
 
-  // Selecting any node should reveal the asset drawer, even if it was collapsed.
+  // The asset drawer is contextual: it stays closed until a node is selected
+  // (on the canvas or via the Layers panel) and closes again when the selection
+  // is cleared (clicking empty canvas).
   useEffect(() => {
-    if (selectedKey) setAssetOpen(true);
+    setAssetOpen(!!selectedKey);
   }, [selectedKey]);
 
   // Load this project's user-drawn cards/connections from localStorage.
@@ -68,6 +78,44 @@ function StudioWorkspace() {
       poster,
     });
   }, [projectId, isDemo, graph.overview?.poster, graph.overview?.title]);
+
+  // --- popup-driven stage gates ---
+  const castDone = graph.characters.length > 0;
+  const scenesExist = graph.scenes.length > 0;
+  const allClips = graph.scenes.flatMap((s) => s.clips);
+  const shotsReady =
+    allClips.length > 0 && allClips.every((c) => c.status === "completed");
+  const filmGenerated = !!graph.overview?.finalVideoUrl;
+
+  // Auto-open each stage's popup once, when it first becomes reachable. Reset
+  // per project so a different film starts fresh.
+  const autoScenes = useRef(false);
+  const autoFinal = useRef(false);
+  useEffect(() => {
+    autoScenes.current = false;
+    autoFinal.current = false;
+  }, [projectId]);
+
+  useEffect(() => {
+    if (isDemo || autoScenes.current) return;
+    if (castDone && !scenesExist && !busy["scenes"]) {
+      autoScenes.current = true;
+      setScenesOpen(true);
+    }
+  }, [isDemo, castDone, scenesExist, busy]);
+
+  useEffect(() => {
+    if (isDemo || autoFinal.current) return;
+    if (shotsReady && !filmGenerated && !busy["film"]) {
+      autoFinal.current = true;
+      openFinalize();
+    }
+  }, [isDemo, shotsReady, filmGenerated, busy, openFinalize]);
+
+  // The scenes popup closes itself once scenes actually exist.
+  useEffect(() => {
+    if (scenesExist) setScenesOpen(false);
+  }, [scenesExist]);
 
   async function onGenerateFilm(name: string) {
     try {
@@ -222,10 +270,9 @@ function StudioWorkspace() {
         <main className="relative flex-1 min-w-0 min-h-0 overflow-hidden bg-surface-0 flex flex-col">
           <StepRail
             graph={graph}
-            busy={busy}
-            onGenerateCast={actions.generateCast}
-            onGenerateScenes={actions.enhanceAndGenerateScenes}
-            onGenerateFilm={openFinalize}
+            heroActive={boardEmpty}
+            onOpenScenes={() => setScenesOpen(true)}
+            onOpenFinal={openFinalize}
           />
           <StudioCanvas
             ref={canvasRef}
@@ -234,13 +281,27 @@ function StudioWorkspace() {
             busy={busy}
             onPlayFilm={openPlayer}
           />
-          <PromptDock
-            graph={graph}
-            version={mediaVersion}
-            busy={busy}
-            directorLog={directorLog}
-            actions={actions}
-          />
+          {!boardEmpty && (
+            <PromptDock
+              graph={graph}
+              version={mediaVersion}
+              busy={busy}
+              directorLog={directorLog}
+              actions={actions}
+            />
+          )}
+
+          {/* New-film starting composer (replaces the empty board). */}
+          <AnimatePresence>
+            {boardEmpty && (
+              <NewFilmHero
+                graph={graph}
+                busy={busy}
+                actions={actions}
+                directorLog={directorLog}
+              />
+            )}
+          </AnimatePresence>
 
           {/* Edge tab to reopen the asset drawer when it's collapsed. */}
           <AnimatePresence>
@@ -284,12 +345,24 @@ function StudioWorkspace() {
         </AnimatePresence>
       </div>
 
-      {/* Finalize: name + generate the film */}
+      {/* Scenes: optional direction, then break the story into scenes */}
+      <AnimatePresence>
+        {scenesOpen && (
+          <ScenesModal
+            busy={!!busy["scenes"]}
+            onSubmit={(d) => actions.enhanceAndGenerateScenes(d)}
+            onClose={() => setScenesOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Finalize: name + generate (or regenerate) the film */}
       <AnimatePresence>
         {finalizeOpen && (
           <FinalizeModal
             defaultName={title}
             busy={!!busy["film"]}
+            alreadyGenerated={filmGenerated}
             onGenerate={onGenerateFilm}
             onClose={closeFinalize}
           />

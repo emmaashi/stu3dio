@@ -39,13 +39,44 @@ export function buildLayout(graph: StudioGraph) {
   const nodes: GNode[] = [];
   const edges: GEdge[] = [];
 
-  const maxClips = graph.scenes.reduce((m, s) => Math.max(m, s.clips.length), 0);
+  const hasChars = graph.characters.length > 0;
+  const hasScenes = graph.scenes.length > 0;
+  const hasClips = graph.scenes.some((s) => s.clips.length > 0);
+  // The Final film node appears only once the film has actually been generated
+  // (the user runs it from the final-film popup), not just because scenes exist.
+  const showFilm = !!graph.overview?.finalVideoUrl;
 
-  const castY = TOP_PAD;
-  const spineY = castY + CH + BAND_GAP;
-  const shotsTop = spineY + SPINE_H + BAND_GAP;
+  const maxClips = graph.scenes.reduce((m, s) => Math.max(m, s.clips.length), 0);
   const clipDepth = Math.max(1, maxClips) * (BR_H + ROW_GAP);
-  const filmY = shotsTop + clipDepth + BAND_GAP;
+
+  // Vertical bands stack top-to-bottom; only stages that have content take up
+  // space, so an empty film shows nothing and each lane appears as it is built.
+  const lanes: Lane[] = [];
+  let y = TOP_PAD;
+  let castY = 0;
+  let spineY = 0;
+  let shotsTop = 0;
+  let filmY = 0;
+  if (hasChars) {
+    castY = y;
+    lanes.push({ key: "cast", label: "Cast", top: castY - 28, height: CH + 56 });
+    y += CH + BAND_GAP;
+  }
+  if (hasScenes) {
+    spineY = y;
+    lanes.push({ key: "story", label: "Story", top: spineY - 28, height: SPINE_H + 56 });
+    y += SPINE_H + BAND_GAP;
+  }
+  if (hasClips) {
+    shotsTop = y;
+    lanes.push({ key: "shots", label: "Shots", top: shotsTop - 28, height: clipDepth + 36 });
+    y += clipDepth + BAND_GAP;
+  }
+  if (showFilm) {
+    filmY = y;
+    lanes.push({ key: "film", label: "Final film", top: filmY - 28, height: FILM_H + 56 });
+    y += FILM_H + BAND_GAP;
+  }
 
   // edge helpers (right->left, and vertical fans)
   const flow = (a: GNode, b: GNode, on: boolean) => {
@@ -164,47 +195,48 @@ export function buildLayout(graph: StudioGraph) {
     });
   });
 
-  // ---- FINAL FILM: centered, everything converges ----
+  // ---- FINAL FILM: centered, everything converges (only once a spine exists) ----
   const spineRight = sceneNodes.length
     ? sceneNodes[sceneNodes.length - 1].x + SPINE_W
     : LEFT_PAD + SPINE_W;
-  const centerX = (LEFT_PAD + spineRight) / 2;
-  // Poster thumbnail for the final film: prefer an explicit poster, else fall
-  // back to the first available scene still or shot frame so the node always
-  // shows representative imagery instead of a black 0:00 video frame.
-  const filmPoster =
-    graph.overview?.poster ||
-    graph.scenes.find((s) => s.media)?.media ||
-    graph.scenes.flatMap((s) => s.clips).find((c) => c.image_url)?.image_url;
-  const film: GNode = {
-    key: "film",
-    kind: "film",
-    spine: true,
-    x: centerX - FILM_W / 2,
-    y: filmY,
-    w: FILM_W,
-    h: FILM_H,
-    title: "Final film",
-    media: filmPoster,
-    video: graph.overview?.finalVideoUrl,
-    ready: graph.complete,
-  };
-  nodes.push(film);
-  sceneNodes.forEach((sn, si) =>
-    down(lastShotByScene[si] || sn, film, graph.complete)
-  );
+  let film: GNode | null = null;
+  if (showFilm) {
+    const centerX = (LEFT_PAD + spineRight) / 2;
+    // Use a representative scene/shot still while in progress; only show the
+    // explicit poster once the film is actually complete, so a brand-new film
+    // never inherits a stale/seeded poster.
+    const firstStill =
+      graph.scenes.find((s) => s.media)?.media ||
+      graph.scenes.flatMap((s) => s.clips).find((c) => c.image_url)?.image_url;
+    const filmPoster = graph.complete
+      ? graph.overview?.poster || firstStill
+      : firstStill;
+    film = {
+      key: "film",
+      kind: "film",
+      spine: true,
+      x: centerX - FILM_W / 2,
+      y: filmY,
+      w: FILM_W,
+      h: FILM_H,
+      title: "Final film",
+      media: filmPoster,
+      video: graph.overview?.finalVideoUrl,
+      ready: graph.complete,
+    };
+    nodes.push(film);
+    sceneNodes.forEach((sn, si) =>
+      down(lastShotByScene[si] || sn, film!, graph.complete)
+    );
+  }
 
-  // ---- lane bands (for labeled headers / backgrounds) ----
-  const right = Math.max(spineRight, film.x + FILM_W);
+  // ---- bounds ----
+  const charsRight = hasChars
+    ? LEFT_PAD + graph.characters.length * (CW + CHAR_GAP)
+    : LEFT_PAD;
+  const right = Math.max(spineRight, charsRight, film ? film.x + FILM_W : 0);
   const width = right + LEFT_PAD;
-  const height = film.y + FILM_H + TOP_PAD;
-
-  const lanes: Lane[] = [
-    { key: "cast", label: "Cast", top: castY - 28, height: CH + 56 },
-    { key: "story", label: "Story", top: spineY - 28, height: SPINE_H + 56 },
-    { key: "shots", label: "Shots", top: shotsTop - 28, height: clipDepth + 36 },
-    { key: "film", label: "Final film", top: filmY - 28, height: FILM_H + 56 },
-  ];
+  const height = y + TOP_PAD;
 
   return { nodes, edges, width, height, lanes, labelX: LABEL_X };
 }

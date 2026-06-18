@@ -1,1 +1,6 @@
-.claude
+.claude.cursor/
+.cursor/
+bun.lock
+bash.exe.stackdump
+winget
+*.stackdump

@@ -11,8 +11,8 @@
 // its moment. These shapes mirror getCompleteProjectStatus().
 // ============================================================================
 
-import type { Project } from "../types/backend";
-import type { BackendCharacter, BackendScene } from "./characterData";
+import type { Project } from "@/types/backend";
+import type { BackendCharacter, BackendScene } from "@/data/characterData";
 
 export const ECHO_PROJECT_ID = "demo-echo-hunter-001";
 export const ECHO_VIDEO_ID = "B-lfTmZp1DE";
@@ -33,11 +33,11 @@ export const ECHO_PROJECT: Project = {
   id: ECHO_PROJECT_ID,
   title: "Echo Hunter",
   summary:
-    "In a rain-drowned megacity, a masked tracker hunts the Echoes \u2014 synthetic doubles of the dead \u2014 and is drawn toward the one quarry he was never meant to find.",
+    "In a rain-drowned megacity, a masked tracker hunts the Echoes, synthetic doubles of the dead, and is drawn toward the one quarry he was never meant to find.",
   plot:
-    "ECHO HUNTER \u2014 an AI-generated noir short film.\n\n" +
-    "Out past the dust where the old city ends, the Hunter drives a black, knife-edged car toward the neon sprawl, a single white pod riding behind him like a coffin. The pod holds an Echo: a synthetic double grown from a dead person's memories, and the Hunter is paid to bring them back \u2014 or put them down.\n\n" +
-    "Beneath the streets, in a vault called Echo Haven, rows of Echoes wait in glass. A grey contact trades the Hunter a glowing key and a name. But this Echo is different: she remembers being loved. Through flooded corridors and a final standoff at gunpoint, the Hunter has to decide whether an Echo of a person is still just an echo \u2014 or someone worth saving.",
+    "ECHO HUNTER, an AI-generated noir short film.\n\n" +
+    "Out past the dust where the old city ends, the Hunter drives a black, knife-edged car toward the neon sprawl, a single white pod riding behind him like a coffin. The pod holds an Echo: a synthetic double grown from a dead person's memories, and the Hunter is paid to bring them back, or put them down.\n\n" +
+    "Beneath the streets, in a vault called Echo Haven, rows of Echoes wait in glass. A grey contact trades the Hunter a glowing key and a name. But this Echo is different: she remembers being loved. Through flooded corridors and a final standoff at gunpoint, the Hunter has to decide whether an Echo of a person is still just an echo, or someone worth saving.",
   created_at: ISO,
   updated_at: ISO,
 };
@@ -67,22 +67,22 @@ export const ECHO_CHARACTERS: BackendCharacter[] = [
   ch(
     HUNTER,
     "The Hunter",
-    "Protagonist \u2014 masked tracker",
+    "Protagonist, masked tracker",
     38,
     IMG("char-hunter.jpg"),
     "A faceless operative behind a smooth white mask and a grey coat, a silver pistol always level and steady. He drives a black, angular machine through the rain and never raises his voice.",
     "Cold, exact, and quietly unravelling; a professional who has started to flinch at his own work.",
-    "Contracted to retrieve or retire Echoes across the megacity. He has done it a hundred times without a second thought \u2014 until this one.",
+    "Contracted to retrieve or retire Echoes across the megacity. He has done it a hundred times without a second thought, until this one.",
   ),
   ch(
     ECHO,
     "The Echo",
-    "The hunted \u2014 a synthetic double",
+    "The hunted, a synthetic double",
     3,
     IMG("char-echo.jpg"),
     "A figure sealed behind a seamless black mirror-mask, moving through sunlit ruins and flooded vaults. Grown, not born; a perfect copy carrying a dead stranger's memories.",
     "Serene, searching, achingly human under the lacquer; certain it is more than a copy.",
-    "Pulled from the glass of Echo Haven, it remembers a life it never lived \u2014 and a person who once loved the original.",
+    "Pulled from the glass of Echo Haven, it remembers a life it never lived, and a person who once loved the original.",
   ),
 ];
 
@@ -136,7 +136,7 @@ export const ECHO_SCENES: DemoScene[] = [
     IMG("scene-3.jpg"),
     [ECHO],
     "Echo Haven",
-    "Under the rain-soaked sign of Echo Haven, rows of Echoes sleep in lit glass \u2014 a vault of the city's doubled dead, waiting to be claimed.",
+    "Under the rain-soaked sign of Echo Haven, rows of Echoes sleep in lit glass, a vault of the city's doubled dead, waiting to be claimed.",
     "ATTENDANT (V.O.): \"Every face in here belonged to someone. None of them do anymore.\"",
   ),
   sc(
@@ -146,7 +146,7 @@ export const ECHO_SCENES: DemoScene[] = [
     [HUNTER],
     "The Contact",
     "In the neon glow of the Echo Return strip, a grey-haired contact passes the Hunter a glowing key and a warning he should have heeded.",
-    "THE CONTACT: \"This one's flagged. Whatever it tells you on the way \u2014 don't listen.\"",
+    "THE CONTACT: \"This one's flagged. Whatever it tells you on the way, don't listen.\"",
   ),
   sc(
     "echo-scene-5",
@@ -163,7 +163,7 @@ export const ECHO_SCENES: DemoScene[] = [
     IMG("scene-6.jpg"),
     [HUNTER, ECHO],
     "The Hunt",
-    "A bridge at speed, a flooded room, a pistol raised \u2014 and a face the Hunter recognizes. The last hunt forces the question of what an Echo is really worth.",
+    "A bridge at speed, a flooded room, a pistol raised, and a face the Hunter recognizes. The last hunt forces the question of what an Echo is really worth.",
     "THE HUNTER: \"...I know you.\"\nTHE ECHO: \"You knew her. I'm what's left.\"",
   ),
 ];

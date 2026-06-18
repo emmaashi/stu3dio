@@ -3,7 +3,7 @@ import { setCurrentProject } from './characterData';
 import { setCurrentProject as setScriptProject, loadProjectScript } from './scriptData';
 import { setDirectorProject, loadConversationHistory, loadConversationContext } from './directorData';
 import type { Project } from '../types/backend';
-import { getDemo } from './demos';
+import { getDemo } from '@/films';
 
 // Global project state
 const projectState = {

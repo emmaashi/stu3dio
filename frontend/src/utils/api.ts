@@ -1,5 +1,5 @@
 import { Project, Job, JobStatusResponse } from '../types/backend';
-import { handleMock, isMockEnabled, setMockEnabled } from '../lib/mockBackend';
+import { handleMock, isMockEnabled, setMockEnabled } from '@/films/mockBackend';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 const FORCE_MOCK = process.env.NEXT_PUBLIC_MOCK === '1';

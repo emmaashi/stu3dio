@@ -20,6 +20,7 @@ import {
   MarkerType,
   NodeResizer,
   useReactFlow,
+  useNodesInitialized,
   useNodesState,
   useEdgesState,
   type Node,
@@ -459,13 +460,22 @@ function CanvasInner({
   useEffect(() => setNodes(rfNodes), [rfNodes, setNodes]);
   useEffect(() => setEdges(rfEdges), [rfEdges, setEdges]);
 
-  // Auto-frame as content streams in until the user takes manual control.
+  // Auto-frame the timeline: a smooth entrance once the nodes are measured, then
+  // reframes as new nodes stream in — until the user takes manual control.
+  const nodesInitialized = useNodesInitialized();
+  const [revealed, setRevealed] = useState(false);
   const interacted = useRef(false);
   const programmatic = useRef(false);
-  const fit = useCallback(() => {
-    programmatic.current = true;
-    rf.fitView({ padding: 0.2, duration: 300, maxZoom: 1 });
-  }, [rf]);
+  const entered = useRef(false);
+  const prevCount = useRef(-1);
+
+  const fit = useCallback(
+    (duration = 520) => {
+      programmatic.current = true;
+      rf.fitView({ padding: 0.18, duration, maxZoom: 1 });
+    },
+    [rf]
+  );
 
   const onMoveStart = useCallback(() => {
     if (programmatic.current) {
@@ -475,17 +485,35 @@ function CanvasInner({
     interacted.current = true;
   }, []);
 
-  const pipelineCount = layout.nodes.length;
-  const prevCount = useRef(-1);
   useEffect(() => {
-    if (pipelineCount !== prevCount.current) {
-      prevCount.current = pipelineCount;
-      if (!interacted.current) {
-        const id = requestAnimationFrame(() => fit());
-        return () => cancelAnimationFrame(id);
-      }
+    if (!nodesInitialized) return;
+    const count = layout.nodes.length;
+    if (!entered.current) {
+      // Center the whole timeline first (instant, while still hidden), then fade
+      // the canvas in — so the unframed top-left state is never shown on entry.
+      entered.current = true;
+      prevCount.current = count;
+      fit(0);
+      const id = requestAnimationFrame(() => setRevealed(true));
+      return () => cancelAnimationFrame(id);
     }
-  }, [pipelineCount, fit]);
+    if (count !== prevCount.current) {
+      prevCount.current = count;
+      if (!interacted.current) fit(440);
+    }
+  }, [nodesInitialized, layout.nodes.length, fit]);
+
+  // Safety net: if initialization never reports, still frame + reveal the canvas.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      if (!entered.current) {
+        entered.current = true;
+        fit(0);
+      }
+      setRevealed(true);
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [fit]);
 
   useImperativeHandle(
     innerRef,
@@ -550,7 +578,15 @@ function CanvasInner({
   const onPaneClick = useCallback(() => select(null), [select]);
 
   return (
-    <div className="relative flex-1 min-h-0">
+    <div
+      className="relative flex-1 min-h-0"
+      style={{
+        opacity: revealed ? 1 : 0,
+        transform: revealed ? "scale(1)" : "scale(0.975)",
+        transformOrigin: "center",
+        transition: "opacity 650ms ease-out, transform 650ms ease-out",
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}

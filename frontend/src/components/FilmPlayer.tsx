@@ -110,9 +110,7 @@ export default function FilmPlayer({
     if (isPlaying) {
       videoRef.current.pause();
     } else {
-      videoRef.current.play().catch(() => {
-        setError("Autoplay blocked. Click play to start.");
-      });
+      videoRef.current.play().catch(() => {/* ignore; user can retry */});
     }
   }, [isPlaying]);
 
@@ -239,7 +237,7 @@ export default function FilmPlayer({
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
       if (autoplay) {
-        video.play().catch(() => setError("Autoplay blocked. Click play to start."));
+        video.play().catch(() => {/* browser blocked autoplay; center play button handles it */});
       }
     };
     const handleTimeUpdate = () => {

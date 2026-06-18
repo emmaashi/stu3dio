@@ -23,7 +23,7 @@ export const HP_PLOT_POINTS = [
 ];
 
 export const HP_DIRECTOR_REPLY =
-  "Love it — a wizarding coming-of-age. I've shaped it into Harry Potter and the Philosopher's Stone: a three-act arc with a warm, iconic cast. The plot and cast are sketched below — hit \u201cGenerate the cast\u201d when you're ready and we'll build it stage by stage.";
+  "Love it, a wizarding coming-of-age. I've shaped it into Harry Potter and the Philosopher's Stone: a three-act arc with a warm, iconic cast. The plot and cast are sketched below. Hit \u201cGenerate the cast\u201d when you're ready and we'll build it stage by stage.";
 
 export type HpCharacter = {
   name: string;
@@ -42,7 +42,7 @@ export const HP_CHARACTERS: HpCharacter[] = [
   // freely licensed, so the trio reads film-era rather than book-age 11.
   {
     name: "Harry Potter",
-    role: "Protagonist — the boy who lived",
+    role: "Protagonist, the boy who lived",
     age: 11,
     description:
       "A small, bespectacled first-year with a lightning-bolt scar and a too-big hand-me-down cloak. Brave without realizing it.",
@@ -53,7 +53,7 @@ export const HP_CHARACTERS: HpCharacter[] = [
   },
   {
     name: "Hermione Granger",
-    role: "Deuteragonist — brightest witch of her age",
+    role: "Deuteragonist, brightest witch of her age",
     age: 11,
     description:
       "Bushy-haired and book-armed, hand always first in the air. Reads ahead, then saves everyone with it.",
@@ -64,7 +64,7 @@ export const HP_CHARACTERS: HpCharacter[] = [
   },
   {
     name: "Ron Weasley",
-    role: "Best friend — heart of the trio",
+    role: "Best friend, heart of the trio",
     age: 12,
     description:
       "Freckled, red-haired, sixth of seven Weasleys, in well-worn robes and clutching a chipped wand.",
@@ -92,18 +92,18 @@ export const HP_CHARACTERS: HpCharacter[] = [
       "Stern in emerald robes and square spectacles, she can become a tabby cat and miss nothing as either.",
     personality: "Exacting, fair, secretly proud of her lions.",
     backstory:
-      "Dumbledore's trusted deputy, she has guarded Hogwarts' rules — and its students — for decades.",
+      "Dumbledore's trusted deputy, she has guarded Hogwarts' rules (and its students) for decades.",
     media: `${WIKI}/thumb/2/28/Maggie_Smith_-_Vintage_%28trim%29.jpg/960px-Maggie_Smith_-_Vintage_%28trim%29.jpg`,
   },
   {
     name: "Severus Snape",
-    role: "Potions master — the suspected one",
+    role: "Potions master, the suspected one",
     age: 41,
     description:
       "Sallow, black-robed, voice like cold silk; he glides through the dungeons and seems to loathe Harry on sight.",
     personality: "Cutting, guarded, motives forever in shadow.",
     backstory:
-      "A brilliant, bitter master whose every move makes Harry sure he is the thief — until the truth turns out stranger.",
+      "A brilliant, bitter master whose every move makes Harry sure he is the thief, until the truth turns out stranger.",
     media: `${WIKI}/thumb/f/fe/Alan_Rickman_after_Seminar_%283%29.jpg/960px-Alan_Rickman_after_Seminar_%283%29.jpg`,
   },
 ];
@@ -125,7 +125,7 @@ export const HP_SCENES: HpScene[] = [
     title: "The Hogwarts Express",
     concise_plot: "Harry boards the scarlet train at Platform Nine and Three-Quarters.",
     detailed_plot:
-      "A scarlet steam engine thunders across a soaring stone viaduct through the Highlands. In a carriage, Harry meets Ron over a trolley of magical sweets, and a frantic Hermione looking for a lost toad — the trio, first met.",
+      "A scarlet steam engine thunders across a soaring stone viaduct through the Highlands. In a carriage, Harry meets Ron over a trolley of magical sweets, and a frantic Hermione looking for a lost toad. The trio, first met.",
     dialogue:
       'RON: "I\'m Ron, by the way. Ron Weasley."\nHARRY: "I\'m Harry. Harry Potter."\nRON: "So it\'s true?!"',
     media: `${WIKI}/thumb/1/10/Glenfinnan_Viaduct_-_2022.jpg/960px-Glenfinnan_Viaduct_-_2022.jpg`,
@@ -153,9 +153,9 @@ export const HP_SCENES: HpScene[] = [
     title: "The Forbidden Corridor",
     concise_plot: "The trio descend past the school's defenses toward the Stone.",
     detailed_plot:
-      "Down through a trapdoor and a tangle of enchantments — Devil's Snare, a storm of flying keys, a giant chessboard — Harry presses on alone toward the mirror where the Stone, and the truth about his enemy, waits.",
+      "Down through a trapdoor and a tangle of enchantments (Devil's Snare, a storm of flying keys, a giant chessboard), Harry presses on alone toward the mirror where the Stone, and the truth about his enemy, waits.",
     dialogue:
-      'HERMIONE: "Books! And cleverness! There are more important things — friendship, and bravery."\nHARRY: "Whatever\'s down there, I\'m going through."',
+      'HERMIONE: "Books! And cleverness! There are more important things. Friendship and bravery."\nHARRY: "Whatever\'s down there, I\'m going through."',
     media: `${WIKI}/thumb/d/d6/Durham_MMB_02_Cathedral.jpg/960px-Durham_MMB_02_Cathedral.jpg`,
     shots: [
       `${WIKI}/thumb/d/d6/Durham_MMB_02_Cathedral.jpg/960px-Durham_MMB_02_Cathedral.jpg`,
