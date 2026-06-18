@@ -249,7 +249,7 @@ const Timeline: React.FC<TimelineProps> = ({ timeline }) => {
       {/* Header */}
       <div className="absolute top-0 left-0 right-0 z-10 bg-black/50 backdrop-blur-sm p-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-medium">{timeline.title}</h1>
+          <h1 className="text-xl font-medium">{timeline?.title}</h1>
           <button
             onClick={() => router.push('/')}
             className="text-white/60 hover:text-white text-sm"
@@ -266,7 +266,7 @@ const Timeline: React.FC<TimelineProps> = ({ timeline }) => {
           className="h-full flex items-center overflow-x-auto px-4 space-x-4 scrollbar-hide"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {timeline.scenes.map((scene) => (
+          {(timeline?.scenes || []).map((scene) => (
             <div
               key={scene.id}
               className="flex-shrink-0 cursor-pointer group"
