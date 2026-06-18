@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { createNewProject } from "@/data/projectData";
-import { listDemos } from "@/data/demos";
-import { HP_POSTER } from "@/data/hpFilm";
+import { listDemos } from "@/films";
+import { HP_POSTER } from "@/films/harry-potter";
 import {
   getRecents,
   recordRecent,
@@ -120,7 +120,7 @@ export default function Home() {
   const recentCards: Card[] = recents.map((r) => ({
     id: r.id,
     title: r.title,
-    description: r.summary?.trim() || "Draft — not started yet.",
+    description: r.summary?.trim() || "Draft, not started yet.",
     meta: `Edited ${relativeTime(r.updatedAt)}`,
     // Mock turns every film into Harry Potter, so fall back to the HP poster
     // for any draft that hasn't captured its own thumbnail yet.
@@ -199,13 +199,7 @@ export default function Home() {
             <p className="mt-1.5 text-sm text-ink-3">{meta.sub}</p>
           </header>
 
-          {cards.length === 0 ? (
-            <div className="px-1 py-7 text-sm text-ink-3">
-              {view === "trash"
-                ? "Trash is empty."
-                : "No films yet — start one with New film."}
-            </div>
-          ) : (
+          {cards.length > 0 && (
             <div className="grid gap-x-[22px] gap-y-6 grid-cols-[repeat(auto-fill,minmax(252px,1fr))]">
               {cards.map((c) => (
                 <div
@@ -251,7 +245,6 @@ export default function Home() {
                     <div className="mt-1.5 text-[13px] leading-normal text-ink-2 min-h-[38px] line-clamp-2">
                       {c.description}
                     </div>
-                    <div className="mt-2.5 text-xs text-ink-4">{c.meta}</div>
                   </div>
                 </div>
               ))}

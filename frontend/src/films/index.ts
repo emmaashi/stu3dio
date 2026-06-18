@@ -1,21 +1,18 @@
-// Registry of the hardcoded demo films so the app can pin and serve more than
-// one (Tears of Steel + Echo Hunter). Keyed by project id.
-
-import type { Project } from "../types/backend";
+import type { Project } from "@/types/backend";
 import {
   DEMO_PROJECT_ID,
   DEMO_PROJECT,
   DEMO_POSTER,
   DEMO_FINAL_FILM_SRC,
   DEMO_COMPLETE_STATUS,
-} from "./demoFilm";
+} from "./tears-of-steel";
 import {
   ECHO_PROJECT_ID,
   ECHO_PROJECT,
   ECHO_POSTER,
   ECHO_FINAL_FILM_SRC,
   ECHO_COMPLETE_STATUS,
-} from "./echoHunter";
+} from "./echo-hunter";
 
 export type DemoStatus = {
   scenes: any[];

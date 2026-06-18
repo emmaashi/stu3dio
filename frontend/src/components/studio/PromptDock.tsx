@@ -34,6 +34,7 @@ export default function PromptDock({
   const detail = resolveSelected(graph, selectedKey);
   const [text, setText] = useState("");
   const [annotate, setAnnotate] = useState(false);
+  const [logOpen, setLogOpen] = useState(true);
   const logRef = useRef<HTMLDivElement>(null);
 
   // mode: director (concept / nothing selected) vs asset edit
@@ -53,7 +54,7 @@ export default function PromptDock({
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [directorLog]);
+  }, [directorLog, logOpen]);
 
   async function submit() {
     const value = text.trim();
@@ -79,10 +80,10 @@ export default function PromptDock({
   }
 
   const placeholder = isDirector
-    ? "Describe your film idea — story, tone, characters…"
+    ? "Describe your film idea: story, tone, characters…"
     : isClip && frameMode === "video"
     ? "Generate the 8s video clip from this frame"
-    : "Describe an edit — e.g. make it nighttime, add rain…"
+    : "Describe an edit, e.g. make it nighttime or add rain…"
 
   const sendDisabled =
     (isDirector && (directorBusy || !text.trim())) ||
@@ -98,27 +99,55 @@ export default function PromptDock({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, delay: 0.05, ease: [0.22, 0.61, 0.36, 1] }}
       >
-        {/* Director transcript (concept mode) */}
+        {/* Director transcript (concept mode), collapsible */}
         <AnimatePresence initial={false}>
           {isDirector && directorLog.length > 0 && (
             <motion.div
-              className="scroll w-full max-h-[150px] overflow-y-auto flex flex-col gap-2 px-[13px] py-[11px] rounded-[14px] bg-glass border border-hair backdrop-blur-md"
-              ref={logRef}
+              className="w-full overflow-hidden rounded-[14px] bg-glass border border-hair backdrop-blur-md"
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.22, ease: [0.22, 0.61, 0.36, 1] }}
             >
-              {directorLog.slice(-6).map((m) => (
-                <div key={m.id} className="flex flex-col gap-0.5 text-[13px] leading-snug">
-                  <span className="slate text-[11px] uppercase tracking-[.08em]">
-                    {m.type === "user" ? "You" : "Director"}
-                  </span>
-                  <span className={m.type === "user" ? "text-ink" : "text-ink-2"}>
-                    {m.content}
-                  </span>
-                </div>
-              ))}
+              <button
+                className="w-full flex items-center justify-between px-[13px] py-2 text-[11px] uppercase tracking-[.08em] text-ink-3 transition-colors hover:text-ink-2"
+                onClick={() => setLogOpen((o) => !o)}
+                title={logOpen ? "Hide conversation" : "Show conversation"}
+              >
+                <span>Conversation</span>
+                <Icon name={logOpen ? "caretDown" : "caretLeft"} size={13} />
+              </button>
+              <AnimatePresence initial={false}>
+                {logOpen && (
+                  <motion.div
+                    key="log-body"
+                    className="overflow-hidden"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: [0.22, 0.61, 0.36, 1] }}
+                  >
+                    <div
+                      className="scroll max-h-[150px] overflow-y-auto flex flex-col gap-2 px-[13px] pb-[11px]"
+                      ref={logRef}
+                    >
+                      {directorLog.slice(-6).map((m) => (
+                        <div
+                          key={m.id}
+                          className="flex flex-col gap-0.5 text-[13px] leading-snug"
+                        >
+                          <span className="slate text-[11px] uppercase tracking-[.08em]">
+                            {m.type === "user" ? "You" : "Director"}
+                          </span>
+                          <span className={m.type === "user" ? "text-ink" : "text-ink-2"}>
+                            {m.content}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>

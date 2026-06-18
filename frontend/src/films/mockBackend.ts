@@ -12,7 +12,7 @@ import {
   HP_FINAL_VIDEO,
   HP_POSTER,
   hpCharacterByName,
-} from "@/data/hpFilm";
+} from "./harry-potter";
 
 let enabled = false;
 export function setMockEnabled(v: boolean) {
@@ -246,7 +246,7 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
         frame_order: i,
         scene_order: scene.metadata.scene_order,
         concise_plot: `Shot ${i + 1} · ${scene.metadata.concise_plot}`,
-        summary: `${scene.metadata.concise_plot} — beat ${i + 1}`,
+        summary: `${scene.metadata.concise_plot} (beat ${i + 1})`,
         veo3_prompt: `Cinematic 8s shot: ${scene.metadata.detailed_plot}. Beat ${i + 1}.`,
         dialogue: "",
         duration: 8,
@@ -303,7 +303,8 @@ export async function handleMock(
       title: body?.title || "Untitled film",
       summary: body?.summary || "",
       plot: body?.plot || "",
-      poster_url: HP_POSTER,
+      // No poster until the film is actually finished (set on stitching) so a
+      // brand-new film never shows a stale/seeded thumbnail.
       created_at: nowISO(),
       updated_at: nowISO(),
     };
@@ -322,6 +323,7 @@ export async function handleMock(
     const s = ensureStore(m[1]);
     const job_id = startJob("video-stitching", () => {
       s.project.final_video_url = HP_FINAL_VIDEO;
+      s.project.poster_url = HP_POSTER;
       s.project.updated_at = nowISO();
     });
     return { message: "Video assembly started", job_id };
@@ -525,6 +527,7 @@ export async function handleMock(
     const s = ensureStore(body.project_id);
     const job_id = startJob("video-stitching", () => {
       s.project.final_video_url = HP_FINAL_VIDEO;
+      s.project.poster_url = HP_POSTER;
       s.project.updated_at = nowISO();
     });
     return { job_id };

@@ -12,8 +12,8 @@
 // These shapes mirror what getCompleteProjectStatus() returns.
 // ============================================================================
 
-import type { Project } from "../types/backend";
-import type { BackendCharacter, BackendScene } from "./characterData";
+import type { Project } from "@/types/backend";
+import type { BackendCharacter, BackendScene } from "@/data/characterData";
 
 export const DEMO_PROJECT_ID = "demo-emberveil-001";
 
@@ -54,11 +54,11 @@ export const DEMO_PROJECT: Project = {
   id: DEMO_PROJECT_ID,
   title: "Tears of Steel",
   summary:
-    "On a bridge in near-future Amsterdam, one moment of fear between Thom and the roboticist Celia spirals \u2014 decades later \u2014 into a war against the machines she built, and a last attempt to set the memory right.",
+    "On a bridge in near-future Amsterdam, one moment of fear between Thom and the roboticist Celia spirals, decades later, into a war against the machines she built, and a last attempt to set the memory right.",
   plot:
-    "TEARS OF STEEL \u2014 a live-action sci-fi short (Blender Foundation, CC-BY).\n\n" +
-    "Forty years ago, on a canal bridge in Amsterdam, Thom flinched from Celia's prosthetic hand \u2014 and lost her. Celia became the most gifted roboticist of her generation, but her creations eventually turned on the city, and the machines rose.\n\n" +
-    "Now, in the ruins, a small resistance \u2014 a wild-eyed engineer, a frantic technician, and a battle-worn soldier \u2014 rebuild Thom from memory and send him back to that bridge. If the recreation can relive the moment and reach Celia where the real Thom could not, her machines may finally stand down. Among a mountain of fallen steel, the old roboticist watches her greatest regret get one more chance.",
+    "TEARS OF STEEL, a live-action sci-fi short (Blender Foundation, CC-BY).\n\n" +
+    "Forty years ago, on a canal bridge in Amsterdam, Thom flinched from Celia's prosthetic hand, and lost her. Celia became the most gifted roboticist of her generation, but her creations eventually turned on the city, and the machines rose.\n\n" +
+    "Now, in the ruins, a small resistance, a wild-eyed engineer, a frantic technician, and a battle-worn soldier, rebuild Thom from memory and send him back to that bridge. If the recreation can relive the moment and reach Celia where the real Thom could not, her machines may finally stand down. Among a mountain of fallen steel, the old roboticist watches her greatest regret get one more chance.",
   created_at: ISO,
   updated_at: ISO,
 };
@@ -96,7 +96,7 @@ export const DEMO_CHARACTERS: BackendCharacter[] = [
   ch(
     THOM,
     "Thom",
-    "Lead \u2014 the man who flinched",
+    "Lead, the man who flinched",
     32,
     F.thomRobot,
     "Dark-haired and easy-going in a worn leather jacket; the kind of man whose worst mistake was a single instinctive recoil. Decades later he exists only as a rebuilt memory.",
@@ -106,27 +106,27 @@ export const DEMO_CHARACTERS: BackendCharacter[] = [
   ch(
     CELIA,
     "Celia",
-    "Lead \u2014 the roboticist",
+    "Lead, the roboticist",
     71,
     F.oldCelia,
     "Once a red-haired young woman with a gleaming prosthetic arm; now silver-haired and weathered, ruling a throne of dead machines she once gave life to.",
     "Brilliant, proud, grieving; convinced love is a fault line she engineered around.",
-    "Rejected on the bridge, she poured herself into robotics and changed the world \u2014 until her machines turned on it. She has spent forty years among their wreckage.",
+    "Rejected on the bridge, she poured herself into robotics and changed the world, until her machines turned on it. She has spent forty years among their wreckage.",
   ),
   ch(
     ENGINEER,
     "The Engineer",
-    "Resistance \u2014 memory-maker",
+    "Resistance, memory-maker",
     49,
     F.brainLab,
     "A wild-eyed tinkerer with a head-mounted magnifier, forever bent over salvaged tech and a living, wired brain on the workbench.",
     "Manic, gleeful, certain his impossible idea is the only one left.",
-    "The mind behind rebuilding Thom from a recorded memory \u2014 the team's one desperate plan to reach Celia's machines.",
+    "The mind behind rebuilding Thom from a recorded memory, the team's one desperate plan to reach Celia's machines.",
   ),
   ch(
     SOLDIER,
     "The Soldier",
-    "Resistance \u2014 the shield",
+    "Resistance, the shield",
     34,
     F.soldier,
     "Battle-worn and fearless, swinging through the burning understructure of the city with a heavy gun and a grin in the teeth of the machines.",
@@ -136,37 +136,37 @@ export const DEMO_CHARACTERS: BackendCharacter[] = [
   ch(
     TECH,
     "The Technician",
-    "Resistance \u2014 the nerves",
+    "Resistance, the nerves",
     27,
     F.tech,
     "Curly-haired and bespectacled, wired into a wall of flickering screens, narrating the recreation in real time at the top of his lungs.",
     "Anxious, brilliant, runs on panic and caffeine.",
-    "Keeps the rebuilt memory stable from the safehouse \u2014 the first to know the moment Thom wakes thinking it is forty years ago.",
+    "Keeps the rebuilt memory stable from the safehouse, the first to know the moment Thom wakes thinking it is forty years ago.",
   ),
   ch(
     SENTINEL,
     "The Sentinel",
-    "Antagonist \u2014 the machines",
+    "Antagonist, the machines",
     40,
     F.robotRoof,
-    "A towering scrap-built war machine, one of the countless robots that rose over Amsterdam \u2014 graffiti-tagged steel tearing through the rooftops.",
+    "A towering scrap-built war machine, one of the countless robots that rose over Amsterdam, graffiti-tagged steel tearing through the rooftops.",
     "Implacable, swarming, the inheritance of a single broken heart.",
     "Born of Celia's genius and turned against the city; forty years of machines stand between the resistance and the bridge.",
   ),
   ch(
     CAPTAIN,
     "The Captain",
-    "Resistance \u2014 the old guard",
+    "Resistance, the old guard",
     61,
     TOS_SEEK(176),
     "Grey-bearded and granite-calm in battered flannel and a field harness, he has led what's left of the resistance since before most of them were born.",
     "Weary, principled, unwilling to spend a life he doesn't have to.",
-    "Holds the safehouse together and signs off on the impossible plan \u2014 then walks point when the team finally goes into the open.",
+    "Holds the safehouse together and signs off on the impossible plan, then walks point when the team finally goes into the open.",
   ),
   ch(
     OPERATOR,
     "The Operator",
-    "Resistance \u2014 the simulation",
+    "Resistance, the simulation",
     36,
     TOS_SEEK(55),
     "Dreadlocked and bandana-wrapped in a stained lab suit, hunched over a glowing console where the words SIMULATION READY hang in the air.",
@@ -176,11 +176,11 @@ export const DEMO_CHARACTERS: BackendCharacter[] = [
   ch(
     EFFIGY,
     "The Effigy",
-    "The recreation \u2014 Thom rebuilt",
+    "The recreation, Thom rebuilt",
     0,
     TOS_SEEK(460),
     "A pale, half-finished android wearing Thom's face, assembled piece by piece in the workshop to walk back into the past.",
-    "Blank until the memory loads \u2014 then heartbreakingly him.",
+    "Blank until the memory loads, then heartbreakingly him.",
     "The vessel for the rebuilt mind: the body that will stand on the bridge in Thom's place.",
   ),
 ];
@@ -217,8 +217,8 @@ export const DEMO_SCENES: DemoScene[] = [
     TOS_SEEK(30),
     [THOM, CELIA],
     "The bridge, forty years ago",
-    "Thom and Celia meet on an Amsterdam canal bridge in spring. When she reaches for him with her new prosthetic hand, he flinches \u2014 and something between them breaks for good.",
-    "CELIA: \"It's still me, Thom.\"\nTHOM: \"...I know. I just \u2014 I can't.\"",
+    "Thom and Celia meet on an Amsterdam canal bridge in spring. When she reaches for him with her new prosthetic hand, he flinches, and something between them breaks for good.",
+    "CELIA: \"It's still me, Thom.\"\nTHOM: \"...I know. I just, I can't.\"",
   ),
   sc(
     "tos-scene-2",
@@ -262,7 +262,7 @@ export const DEMO_SCENES: DemoScene[] = [
     TOS_SEEK(55),
     [OPERATOR, ENGINEER, EFFIGY],
     "The simulation",
-    "Before they risk the open city, the operator runs the recreation in simulation \u2014 the recovered mind firing across a glowing rig as the effigy takes shape on the bench.",
+    "Before they risk the open city, the operator runs the recreation in simulation, the recovered mind firing across a glowing rig as the effigy takes shape on the bench.",
     "THE OPERATOR: \"Simulation ready. Loading him in... and he's dreaming.\"",
   ),
   sc(
@@ -271,7 +271,7 @@ export const DEMO_SCENES: DemoScene[] = [
     TOS_SEEK(430),
     [THOM, CELIA, ENGINEER, TECH, OPERATOR, EFFIGY],
     "Rebuilding the mind",
-    "The team pours Thom's recorded memory into the waiting effigy \u2014 a living recreation meant to stand again on that bridge, so Celia's machines can finally be told the truth.",
+    "The team pours Thom's recorded memory into the waiting effigy, a living recreation meant to stand again on that bridge, so Celia's machines can finally be told the truth.",
     "THE TECHNICIAN: \"He's... awake. He thinks it's forty years ago.\"",
   ),
   sc(
@@ -290,7 +290,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [SOLDIER, SENTINEL],
     "Into the fire",
     "As the machines close in, the soldier draws their fire through the burning understructure of the city so the recreation can reach the bridge in time.",
-    "THE SOLDIER: \"Go! I've got their attention \u2014 now MOVE!\"",
+    "THE SOLDIER: \"Go! I've got their attention, now MOVE!\"",
   ),
   sc(
     "tos-scene-10",

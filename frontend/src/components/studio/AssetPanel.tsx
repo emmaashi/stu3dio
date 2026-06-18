@@ -286,7 +286,7 @@ function OverviewEditor({
 
       <div className="flex-1 min-h-0 px-4 pt-1 pb-4 flex flex-col gap-2.5">
         <p className="shrink-0 text-[12px] leading-snug text-ink-3">
-          Describe the film you want to make — this concept guides the cast and
+          Describe the film you want to make. This concept guides the cast and
           scenes generated next.
         </p>
 
@@ -316,7 +316,7 @@ function OverviewEditor({
           <textarea
             className={cn(OV_FIELD, "flex-1 min-h-[120px]")}
             value={plot}
-            placeholder="Outline the story — characters, beats, the arc…"
+            placeholder="Outline the story: characters, beats, the arc…"
             onChange={(e) => setPlot(e.target.value)}
           />
         </div>
