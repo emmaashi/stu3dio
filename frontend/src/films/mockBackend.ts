@@ -13,6 +13,7 @@ import {
   HP_POSTER,
   hpCharacterByName,
 } from "./harry-potter";
+import type { AgentApproval, AgentEvent, AgentRun } from "@/types/agent";
 
 let enabled = false;
 export function setMockEnabled(v: boolean) {
@@ -144,6 +145,218 @@ type Job = {
 
 const projects = new Map<string, Store>();
 const jobs = new Map<string, Job>();
+const agentRuns = new Map<string, AgentRun>();
+const agentEvents = new Map<string, AgentEvent[]>();
+const agentListeners = new Map<string, Set<(event: AgentEvent) => void>>();
+
+function emitAgent(runId: string, type: string, data: Record<string, unknown>) {
+  const events = agentEvents.get(runId) || [];
+  const event: AgentEvent = {
+    id: events.length + 1,
+    run_id: runId,
+    type,
+    timestamp: nowISO(),
+    data,
+  };
+  events.push(event);
+  agentEvents.set(runId, events);
+  const run = agentRuns.get(runId);
+  if (run) {
+    run.last_event_id = event.id;
+    run.updated_at = event.timestamp;
+    if (type === "run.status") {
+      if (data.status) run.status = data.status as AgentRun["status"];
+      if (data.phase) run.phase = data.phase as AgentRun["phase"];
+    }
+    if (type === "message.delta") run.assistant_text += String(data.delta || "");
+    if (type === "approval.requested") run.approval = data as unknown as AgentRun["approval"];
+    if (type === "run.completed") run.status = "completed";
+    if (type === "run.cancelled") run.status = "cancelled";
+  }
+  agentListeners.get(runId)?.forEach((listener) => listener(event));
+}
+
+export function subscribeMockAgentRun(
+  runId: string,
+  afterId: number,
+  callbacks: {
+    onEvent: (event: AgentEvent) => void;
+    onOpen?: () => void;
+    onError?: (message: string) => void;
+  }
+) {
+  const listeners = agentListeners.get(runId) || new Set();
+  const listener = (event: AgentEvent) => callbacks.onEvent(event);
+  listeners.add(listener);
+  agentListeners.set(runId, listeners);
+  queueMicrotask(() => {
+    callbacks.onOpen?.();
+    for (const event of agentEvents.get(runId) || []) {
+      if (event.id > afterId) callbacks.onEvent(event);
+    }
+  });
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) agentListeners.delete(runId);
+  };
+}
+
+function mockTitle(prompt: string) {
+  const subject = prompt
+    .replace(/^(create|make|develop|produce)\s+(a\s+)?(cinematic\s+)?(\d+-second\s+)?/i, "")
+    .replace(/^film\s+(about|where)\s+/i, "")
+    .replace(/^.*?\babout\s+/i, "")
+    .split(/[.!?]/)[0]
+    .trim();
+  const words = (subject || "an original short film").split(/\s+/).slice(0, 7);
+  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+
+function mockCharacters(prompt: string) {
+  const premise = prompt || "an original cinematic story";
+  return [
+    { name: "The Lead", role: "Protagonist", age: 32, description: `The emotional point of view for ${premise}`, personality: "Observant, driven, and quietly vulnerable", backstory: "Carries a personal stake in the central mystery." },
+    { name: "The Counterpart", role: "Catalyst", age: 38, description: "The figure who challenges the protagonist's understanding of events.", personality: "Precise, guarded, and persuasive", backstory: "Knows more about the inciting event than they initially reveal." },
+    { name: "The Witness", role: "Supporting", age: 55, description: "A grounded witness who connects the present conflict to its hidden history.", personality: "Patient, perceptive, and morally conflicted", backstory: "Preserved one crucial detail everyone else overlooked." },
+  ];
+}
+
+function createMockConceptApproval(prompt: string): AgentApproval {
+  const premise = prompt || "Create an original cinematic short film.";
+  const values = {
+    title: mockTitle(premise),
+    logline: premise,
+    summary: premise,
+    story_direction: `${premise}\n\nBuild a clear discovery, confrontation, and decisive final image across eight shots.`,
+    visual_style: "Cinematic realism with expressive contrast and deliberate camera movement",
+    audio_direction: "Atmospheric score, focused dialogue, and tactile environmental sound",
+    runtime_seconds: 64,
+    aspect_ratio: "16:9",
+    shot_seconds: 8,
+    characters: mockCharacters(premise),
+  };
+  return {
+    id: uid(),
+    kind: "concept" as const,
+    title: "Approve the concept and cast",
+    description: "Confirm the creative direction before Stu3dio plans the shots.",
+    status: "pending" as const,
+    fields: [
+      { id: "title", label: "Title", type: "text" },
+      { id: "story_direction", label: "Story direction", type: "textarea" },
+      { id: "visual_style", label: "Visual style", type: "text" },
+      { id: "runtime_seconds", label: "Runtime", type: "single-select", options: [24, 64, 96] },
+      { id: "aspect_ratio", label: "Aspect ratio", type: "single-select", options: ["16:9", "9:16", "1:1"] },
+      { id: "characters", label: "Cast", type: "summary-list" },
+    ],
+    values,
+    created_at: nowISO(),
+  };
+}
+
+function createMockProductionApproval(prompt: string): AgentApproval {
+  const counts = [3, 2, 3];
+  const beats = [
+    { title: "The Inciting Discovery", detail: `Establish the world and the protagonist's immediate stake in this premise: ${prompt}` },
+    { title: "The Truth Surfaces", detail: "Escalate the central contradiction, reveal the hidden connection, and force the protagonist to act." },
+    { title: "The Final Choice", detail: "Resolve the confrontation through a visual decision, then land on a memorable cinematic final image." },
+  ];
+  const scenes = beats.map((scene, index) => ({
+    id: `scene-${index + 1}`,
+    scene_order: index + 1,
+    title: scene.title,
+    concise_plot: scene.title,
+    detailed_plot: scene.detail,
+    dialogue: "",
+    target_frames: counts[index],
+    duration: (counts[index] || 1) * 8,
+  }));
+  const values = { overview: "A three-act progression told across eight cinematic shots.", scenes };
+  return {
+    id: uid(),
+    kind: "production_plan" as const,
+    title: "Approve the scene and shot plan",
+    description: "Media generation starts only after this plan is approved.",
+    status: "pending" as const,
+    fields: [{ id: "scenes", label: "Scenes", type: "scene-plan" }],
+    values,
+    created_at: nowISO(),
+  };
+}
+
+function materializeMockProduction(run: AgentRun) {
+  const store = ensureStore(run.project_id);
+  const conceptCharacters = Array.isArray(run.concept?.characters)
+    ? run.concept.characters as Array<Record<string, unknown>>
+    : mockCharacters(run.prompt);
+  const plannedScenes = Array.isArray(run.production_plan?.scenes)
+    ? run.production_plan.scenes as Array<Record<string, unknown>>
+    : createMockProductionApproval(run.prompt).values.scenes as Array<Record<string, unknown>>;
+  emitAgent(run.id, "run.status", { status: "running", phase: "assets" });
+  emitAgent(run.id, "activity.started", { id: "mock-assets", label: "Creating consistent character references", phase: "assets" });
+  conceptCharacters.forEach((character, index) => {
+    const name = String(character.name || `Character ${index + 1}`);
+    const taskId = uid();
+    const task = { id: taskId, label: `Design ${name}`, phase: "assets", job_type: "character-generation", status: "completed", progress: 100 };
+    run.tasks.push(task as any);
+    emitAgent(run.id, "task.completed", task);
+    if (!store.characters.some((item) => item.metadata.name === name)) {
+      store.characters.push({
+        id: uid(), project_id: store.project.id, media_url: portraitFor(index),
+        metadata: {
+          name,
+          role: String(character.role || "Supporting"),
+          age: Number(character.age || 30),
+          description: String(character.description || "A key character in the approved story."),
+          personality: String(character.personality || "Distinct and memorable"),
+          backstory: String(character.backstory || "Their history informs the current conflict."),
+        },
+        created_at: nowISO(), updated_at: nowISO()
+      });
+    }
+  });
+  emitAgent(run.id, "activity.completed", { id: "mock-assets", label: `${store.characters.length} character references ready`, phase: "assets" });
+
+  setTimeout(() => {
+    emitAgent(run.id, "run.status", { status: "running", phase: "videos" });
+    emitAgent(run.id, "activity.started", { id: "mock-video", label: "Rendering eight cinematic clips", phase: "videos" });
+    if (!store.scenes.length) {
+      plannedScenes.slice(0, 3).forEach((source, index) => {
+        const scene: Scene = {
+          id: uid(), project_id: store.project.id, media_url: sceneStill(index),
+          metadata: {
+            scene_order: Number(source.scene_order || index + 1),
+            concise_plot: String(source.title || source.concise_plot || `Scene ${index + 1}`),
+            detailed_plot: String(source.detailed_plot || source.concise_plot || run.prompt),
+            dialogue: String(source.dialogue || ""),
+          },
+          created_at: nowISO(), updated_at: nowISO()
+        };
+        store.scenes.push(scene);
+        spawnFramesForScene(store, scene, Number(source.target_frames || [3, 2, 3][index] || 1));
+      });
+    }
+    const task = { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "running", progress: 62, completed: 5, total: 8 };
+    emitAgent(run.id, "task.progress", task);
+  }, 550);
+
+  setTimeout(() => {
+    for (const frame of store.frames) frame.video_url = HP_CLIP_VIDEO;
+    emitAgent(run.id, "task.progress", { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "completed", progress: 100, completed: 8, total: 8 });
+    emitAgent(run.id, "activity.completed", { id: "mock-video", label: "8 clips ready for assembly", phase: "videos" });
+    emitAgent(run.id, "insight.created", { id: uid(), title: "Production ready", metrics: [{ label: "Scenes", value: 3 }, { label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Audio", value: "Generated" }] });
+    const approval = {
+      id: uid(), kind: "assembly" as const, title: "Assemble the final film?",
+      description: "8 clips are ready. Stu3dio will join them into a 64-second cut.",
+      status: "pending" as const, fields: [], values: { clips: 8, runtime_seconds: 64, aspect_ratio: "16:9", audio: "generated" }, created_at: nowISO()
+    };
+    run.approval = approval;
+    run.status = "awaiting_approval";
+    run.phase = "assembly";
+    emitAgent(run.id, "approval.requested", approval as unknown as Record<string, unknown>);
+    emitAgent(run.id, "run.status", { status: "awaiting_approval", phase: "assembly" });
+  }, 2_300);
+}
 
 function ensureStore(id: string): Store {
   let s = projects.get(id);
@@ -294,6 +507,136 @@ export async function handleMock(
 ): Promise<any> {
   const path = endpoint.split("?")[0];
   let m: RegExpMatchArray | null;
+
+  if (method === "POST" && (m = path.match(/^\/api\/projects\/([^/]+)\/agent-attachments$/))) {
+    const file = body?.file as File | undefined;
+    if (!file) throw new MockError("Choose an image to attach", 400);
+    return {
+      id: uid(),
+      name: file.name,
+      url: typeof URL !== "undefined" ? URL.createObjectURL(file) : `mock://agent-reference/${encodeURIComponent(file.name)}`,
+      mime_type: file.type,
+      size: file.size,
+    };
+  }
+
+  if (method === "POST" && (m = path.match(/^\/api\/projects\/([^/]+)\/agent-runs$/))) {
+    const projectId = m[1];
+    const runId = uid();
+    const timestamp = nowISO();
+    const run: AgentRun = {
+      id: runId,
+      project_id: projectId,
+      kind: body?.kind || "create-film",
+      prompt: body?.prompt || "",
+      status: "queued",
+      phase: "concept",
+      settings: { runtime_seconds: 64, aspect_ratio: "16:9", shot_seconds: 8, ...(body?.settings || {}) },
+      context: body?.context || {},
+      tasks: [],
+      artifacts: [],
+      assistant_text: "",
+      created_at: timestamp,
+      updated_at: timestamp,
+      last_event_id: 0,
+    };
+    agentRuns.set(runId, run);
+    agentEvents.set(runId, []);
+    emitAgent(runId, "message.completed", { id: uid(), role: "user", content: run.prompt });
+    emitAgent(runId, "run.status", { status: "queued", phase: "concept" });
+    setTimeout(() => {
+      emitAgent(runId, "run.status", { status: "thinking", phase: "concept" });
+      emitAgent(runId, "activity.started", { id: "mock-concept", label: "Structuring the story", phase: "concept" });
+      emitAgent(runId, "message.started", { id: "mock-director", role: "assistant" });
+      const chunks = [
+        "I’m shaping this into a focused 64-second short with a clear visual arc. ",
+        "The cast, tone, and production constraints are ready for your review before any media is generated."
+      ];
+      chunks.forEach((chunk, index) => setTimeout(() => emitAgent(runId, "message.delta", { id: "mock-director", role: "assistant", delta: chunk }), 180 * (index + 1)));
+      setTimeout(() => {
+        emitAgent(runId, "message.completed", { id: "mock-director", role: "assistant", content: chunks.join("") });
+        emitAgent(runId, "activity.completed", { id: "mock-concept", label: "Concept and cast brief ready", phase: "concept" });
+        const approval = createMockConceptApproval(run.prompt);
+        run.concept = approval.values;
+        run.approval = approval;
+        run.status = "awaiting_approval";
+        emitAgent(runId, "context.updated", { project: { id: projectId, title: ensureStore(projectId).project.title }, inheritance: ["project summary", "project plot"] });
+        emitAgent(runId, "approval.requested", approval as unknown as Record<string, unknown>);
+        emitAgent(runId, "run.status", { status: "awaiting_approval", phase: "concept" });
+      }, 650);
+    }, 120);
+    return run;
+  }
+  if (method === "GET" && (m = path.match(/^\/api\/agent-runs\/([^/]+)$/))) {
+    const run = agentRuns.get(m[1]);
+    if (!run) throw new MockError("Agent run not found");
+    return { ...run };
+  }
+  if (method === "POST" && (m = path.match(/^\/api\/agent-runs\/([^/]+)\/approvals\/([^/]+)$/))) {
+    const run = agentRuns.get(m[1]);
+    if (!run || !run.approval || run.approval.id !== m[2]) throw new MockError("Approval is no longer active", 409);
+    const approval = run.approval;
+    emitAgent(run.id, "approval.resolved", { id: approval.id, kind: approval.kind, decision: body?.decision, values: body?.values || {}, feedback: body?.feedback });
+    run.approval = {
+      ...approval,
+      status: body?.decision === "approve" ? "approved" : body?.decision === "revise" ? "revision_requested" : "cancelled",
+      resolved_at: nowISO(),
+    };
+    if (body?.decision === "cancel") {
+      run.status = "cancelled";
+      emitAgent(run.id, "run.cancelled", { reason: "Cancelled at approval checkpoint" });
+      return run;
+    }
+    if (approval.kind === "concept") {
+      run.concept = { ...(run.concept || {}), ...(body?.values || {}) };
+      run.status = "thinking";
+      run.phase = "production_plan";
+      emitAgent(run.id, "run.status", { status: "thinking", phase: "production_plan" });
+      emitAgent(run.id, "activity.started", { id: "mock-plan", label: body?.decision === "revise" ? "Revising the creative brief" : "Planning eight cinematic shots", phase: "production_plan" });
+      setTimeout(() => {
+        const next = body?.decision === "revise" ? createMockConceptApproval(run.prompt) : createMockProductionApproval(run.prompt);
+        run.approval = next as any;
+        if (next.kind === "production_plan") run.production_plan = next.values;
+        run.status = "awaiting_approval";
+        run.phase = next.kind === "concept" ? "concept" : "production_plan";
+        emitAgent(run.id, "activity.completed", { id: "mock-plan", label: next.kind === "concept" ? "Revised concept ready" : "Scene and shot plan ready", phase: run.phase });
+        if (next.kind === "production_plan") emitAgent(run.id, "diff.created", { id: uid(), title: "Proposed production plan", rows: (next.values.scenes as any[]).map((scene) => ({ id: scene.id, label: scene.title, before: "", after: scene.concise_plot, change: "added" })) });
+        emitAgent(run.id, "approval.requested", next as unknown as Record<string, unknown>);
+        emitAgent(run.id, "run.status", { status: "awaiting_approval", phase: run.phase });
+      }, 650);
+    } else if (approval.kind === "production_plan") {
+      if (body?.decision === "revise") {
+        const next = createMockProductionApproval(run.prompt);
+        run.approval = next;
+        emitAgent(run.id, "diff.created", { id: uid(), title: "Revised production plan", rows: (next.values.scenes as any[]).map((scene) => ({ id: scene.id, label: scene.title, before: "Previous beat", after: scene.concise_plot, change: "modified" })) });
+        emitAgent(run.id, "approval.requested", next as unknown as Record<string, unknown>);
+      } else {
+        materializeMockProduction(run);
+      }
+    } else {
+      const store = ensureStore(run.project_id);
+      run.status = "running";
+      emitAgent(run.id, "run.status", { status: "running", phase: "assembly" });
+      emitAgent(run.id, "activity.started", { id: "mock-assembly", label: "Assembling the final film", phase: "assembly" });
+      setTimeout(() => {
+        store.project.final_video_url = HP_FINAL_VIDEO;
+        store.project.poster_url = HP_POSTER;
+        run.status = "completed";
+        emitAgent(run.id, "activity.completed", { id: "mock-assembly", label: "Final film assembled", phase: "assembly" });
+        emitAgent(run.id, "insight.created", { id: uid(), title: "Your film is ready", metrics: [{ label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Format", value: "16:9" }], artifact_url: HP_FINAL_VIDEO });
+        emitAgent(run.id, "run.completed", { video_url: HP_FINAL_VIDEO });
+        emitAgent(run.id, "run.status", { status: "completed", phase: "assembly" });
+      }, 850);
+    }
+    return run;
+  }
+  if (method === "POST" && (m = path.match(/^\/api\/agent-runs\/([^/]+)\/cancel$/))) {
+    const run = agentRuns.get(m[1]);
+    if (!run) throw new MockError("Agent run not found");
+    run.status = "cancelled";
+    emitAgent(run.id, "run.cancelled", { reason: "Cancelled by user" });
+    return run;
+  }
 
   if (method === "POST" && path === "/api/projects") {
     const id = uid();

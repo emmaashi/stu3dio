@@ -150,10 +150,10 @@ export default function Home() {
   return (
     <div className="grid grid-cols-[248px_1fr] h-screen bg-surface-0 text-ink">
       {/* Sidebar */}
-      <aside className="flex flex-col gap-[18px] px-4 py-5 border-r border-hair bg-surface-1">
+      <aside className="flex flex-col gap-[18px] px-4 py-5 border-r border-hair-2 bg-surface-1">
         <div className="px-1.5 pt-1 pb-0.5">
           <span className="text-[19px] font-extrabold tracking-[-.01em] text-ink">
-            STU<em className="not-italic text-accent">3</em>DIO
+            STU<em className="not-italic text-[var(--motion-accent)]">3D</em>IO
           </span>
         </div>
         <button

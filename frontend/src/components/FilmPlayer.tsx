@@ -468,7 +468,7 @@ export default function FilmPlayer({
           <button
             onClick={togglePlay}
             className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-white/30 transition-all duration-200 group"
-            aria-label="Play"
+            aria-label="Play video overlay"
           >
             <svg className="w-6 h-6 text-white ml-1" fill="currentColor" viewBox="0 0 24 24">
               <path d="M8 5v14l11-7z"/>

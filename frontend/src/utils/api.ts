@@ -1,7 +1,7 @@
 import { Project, Job, JobStatusResponse } from '../types/backend';
 import { handleMock, isMockEnabled, setMockEnabled } from '@/films/mockBackend';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 const FORCE_MOCK = process.env.NEXT_PUBLIC_MOCK === '1';
 
 class ApiError extends Error {
@@ -41,11 +41,13 @@ async function ensureMode(): Promise<boolean> {
   return modePromise;
 }
 
-async function fetchApi(endpoint: string, options: RequestInit = {}): Promise<any> {
+export async function fetchApi(endpoint: string, options: RequestInit = {}): Promise<any> {
   const useMock = await ensureMode();
   if (useMock) {
     const method = (options.method || 'GET').toUpperCase();
-    const body = options.body ? JSON.parse(options.body as string) : undefined;
+    const body = typeof FormData !== 'undefined' && options.body instanceof FormData
+      ? Object.fromEntries(options.body.entries())
+      : options.body ? JSON.parse(options.body as string) : undefined;
     try {
       return await handleMock(method, endpoint, body);
     } catch (err: any) {
@@ -54,12 +56,10 @@ async function fetchApi(endpoint: string, options: RequestInit = {}): Promise<an
   }
 
   const url = `${API_BASE_URL}${endpoint}`;
+  const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: multipart ? options.headers : { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
 

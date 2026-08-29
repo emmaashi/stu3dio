@@ -32,10 +32,15 @@ type Item =
   | { type: "leaf"; leaf: Leaf }
   | { type: "group"; group: Group };
 
-export default function LayersPanel({ graph }: { graph: StudioGraph }) {
-  const selectedKey = useStudioStore((s) => s.selectedKey);
+export default function LayersPanel({
+  graph,
+  onCollapse,
+}: {
+  graph: StudioGraph;
+  onCollapse: () => void;
+}) {
+  const selectedKeys = useStudioStore((s) => s.selectedKeys);
   const focus = useStudioStore((s) => s.focus);
-  const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
   const toggle = (groupKey: string) =>
@@ -48,16 +53,6 @@ export default function LayersPanel({ graph }: { graph: StudioGraph }) {
 
   const items = useMemo<Item[]>(() => {
     const out: Item[] = [];
-    if (graph.overview)
-      out.push({
-        type: "leaf",
-        leaf: {
-          key: "overview",
-          label: graph.overview.title || "Concept",
-          icon: "doc",
-        },
-      });
-
     if (graph.characters.length > 0) {
       out.push({
         type: "group",
@@ -102,48 +97,40 @@ export default function LayersPanel({ graph }: { graph: StudioGraph }) {
     return out;
   }, [graph]);
 
-  const q = query.trim().toLowerCase();
-  const matches = (s: string) => s.toLowerCase().includes(q);
-
   return (
     <aside className="flex flex-col min-h-0 flex-1 w-full bg-surface-1 overflow-y-auto">
-      <div className="flex gap-[14px] px-4 pt-[14px] pb-2.5">
-        <span className="text-[13px] font-semibold text-ink cursor-default">Assets</span>
-      </div>
-      <div className="px-3 pb-2.5">
-        <input
-          className="w-full px-[11px] py-[7px] rounded-[10px] text-[13px] text-ink bg-glass border border-hair outline-none focus:border-white/[.22]"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search assets…"
-        />
+      <div className="flex items-center justify-between px-3 pt-3 pb-2.5">
+        <span className="text-[13px] font-semibold text-ink cursor-default px-1">Assets</span>
+        <button
+          className="grid place-items-center w-[26px] h-[26px] rounded-btn text-ink-3 transition-colors hover:text-ink hover:bg-glass"
+          onClick={onCollapse}
+          title="Hide panel"
+          aria-label="Hide panel"
+        >
+          <Icon name="caretLeft" size={14} />
+        </button>
       </div>
       <div className="scroll flex-1 min-h-0 px-2 py-0.5 overflow-y-auto">
         {items.map((item) => {
           if (item.type === "leaf") {
             const r = item.leaf;
-            if (q && !matches(r.label)) return null;
-            return <LeafRow key={r.key} r={r} lead selectedKey={selectedKey} focus={focus} />;
+            return <LeafRow key={r.key} r={r} lead selectedKeys={selectedKeys} focus={focus} />;
           }
 
           const g = item.group;
-          // While searching, only show groups with a matching label or child.
-          const childMatches = g.children.filter((c) => !q || matches(c.label));
-          if (q && !matches(g.label) && childMatches.length === 0) return null;
-          // Auto-expand on search; otherwise honor collapsed state.
-          const isCollapsed = !q && collapsed.has(g.groupKey);
-          const shown = q ? childMatches : g.children;
-          const groupOn = !!g.focusKey && selectedKey === g.focusKey;
+          const isCollapsed = collapsed.has(g.groupKey);
+          const groupOn = !!g.focusKey && selectedKeys.includes(g.focusKey);
 
           return (
             <div key={g.groupKey} className="flex flex-col">
               <button
                 className={cn("group", ROW_BASE, groupOn ? ROW_ON : ROW_OFF)}
-                onClick={() => {
-                  toggle(g.groupKey);
-                  if (g.focusKey) focus(g.focusKey);
+                onClick={(event) => {
+                  if (!event.shiftKey) toggle(g.groupKey);
+                  if (g.focusKey) focus(g.focusKey, { additive: event.shiftKey });
                 }}
                 title={g.label}
+                aria-pressed={groupOn}
               >
                 <motion.span
                   className="grid place-items-center w-4 shrink-0 text-ink-3 group-hover:text-ink"
@@ -175,12 +162,12 @@ export default function LayersPanel({ graph }: { graph: StudioGraph }) {
                     exit={{ height: 0, opacity: 0 }}
                     transition={{ duration: 0.24, ease: EASE_CINE }}
                   >
-                    {shown.map((c) => (
+                    {g.children.map((c) => (
                       <LeafRow
                         key={c.key}
                         r={c}
                         indent
-                        selectedKey={selectedKey}
+                        selectedKeys={selectedKeys}
                         focus={focus}
                       />
                     ))}
@@ -200,21 +187,23 @@ function LeafRow({
   r,
   indent,
   lead,
-  selectedKey,
+  selectedKeys,
   focus,
 }: {
   r: Leaf;
   indent?: boolean;
   lead?: boolean;
-  selectedKey: string | null;
-  focus: (key: string) => void;
+  selectedKeys: string[];
+  focus: (key: string, options?: { additive?: boolean }) => void;
 }) {
-  const on = selectedKey === r.key;
+  const on = selectedKeys.includes(r.key);
   return (
     <button
       className={cn(ROW_BASE, on ? ROW_ON : ROW_OFF, indent && "pl-[50px]")}
-      onClick={() => focus(r.key)}
-      title={r.label}
+      onClick={(event) => focus(r.key, { additive: event.shiftKey })}
+      title={`${r.label} · Shift-click to select multiple`}
+      aria-label={`${r.label}. Shift-click to select multiple`}
+      aria-pressed={on}
     >
       {lead && <span className="w-4 shrink-0" aria-hidden />}
       <span className={cn("grid place-items-center shrink-0", on ? "text-ink" : "text-ink-3")}>

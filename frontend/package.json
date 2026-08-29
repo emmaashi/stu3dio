@@ -6,7 +6,7 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint src",
     "test": "vitest",
     "test:run": "vitest run"
   },
@@ -55,6 +55,8 @@
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^5.0.2",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^15.5.3",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^7.1.5"
