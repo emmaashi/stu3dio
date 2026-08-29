@@ -29,6 +29,7 @@ import {
   type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { Link2 } from "lucide-react";
 
 import { useStudioStore } from "@/store/useStudioStore";
 import { useCustomGraphStore } from "@/store/useCustomGraphStore";
@@ -39,7 +40,7 @@ import { Icon, KIND_ICON } from "./Icon";
 import { cn } from "@/lib/utils";
 import type { StudioGraph, GNode } from "./types";
 
-const ACCENT = "#8b6cff";
+const ACCENT = "#e2e5ea";
 const ZOOM_BTN =
   "w-[30px] h-[30px] grid place-items-center rounded-[6px] text-ink-2 transition-colors hover:text-ink hover:bg-glass-2";
 const HANDLE_CLS = "!w-2 !h-2 !rounded-full !bg-glass-2 !border !border-hair";
@@ -75,7 +76,9 @@ function NodeHandles() {
 
 function PipelineNode({ id, data }: NodeProps<PipelineRFNode>) {
   const { gnode: n, busy, version } = data;
-  const selected = useStudioStore((s) => s.selectedKey === id);
+  const selectedKeys = useStudioStore((s) => s.selectedKeys);
+  const selectedIndex = selectedKeys.indexOf(id);
+  const selected = selectedIndex !== -1;
 
   const statusClass = n.kind === "clip" && n.status ? ` ${n.status}` : "";
   const cls =
@@ -124,6 +127,12 @@ function PipelineNode({ id, data }: NodeProps<PipelineRFNode>) {
       <div className="cv-node-ic">
         <Icon name={KIND_ICON[n.kind]} size={12} />
       </div>
+      {selected && (
+        <div className="cv-node-link-badge" aria-label={`Linked context ${selectedIndex + 1}`}>
+          <Link2 size={10} strokeWidth={2.2} />
+          {selectedKeys.length > 1 && <span>{selectedIndex + 1}</span>}
+        </div>
+      )}
       <div className="cv-node-title">{n.title}</div>
       {(busy || n.loading) && <div className="cv-node-busy" />}
       {n.loading && (
@@ -553,17 +562,12 @@ function CanvasInner({
   );
 
   const onNodeClick = useCallback(
-    (_e: React.MouseEvent, node: Node) => {
+    (event: React.MouseEvent, node: Node) => {
       if (node.type !== "pipeline") return;
       const n = (node.data as PipelineData).gnode;
-      if (n.kind === "film") {
-        if (n.video) onPlayFilm(n.video, n.title);
-        else openFinalize();
-        return;
-      }
-      select(n.key);
+      select(n.key, { additive: event.shiftKey });
     },
-    [select, openFinalize, onPlayFilm]
+    [select]
   );
 
   const onNodeDoubleClick = useCallback(
@@ -571,8 +575,12 @@ function CanvasInner({
       if (node.type !== "pipeline") return;
       const n = (node.data as PipelineData).gnode;
       if (n.kind === "clip" && n.video) onPlayFilm(n.video, n.label || n.title);
+      if (n.kind === "film") {
+        if (n.video) onPlayFilm(n.video, n.title);
+        else openFinalize();
+      }
     },
-    [onPlayFilm]
+    [onPlayFilm, openFinalize]
   );
 
   const onPaneClick = useCallback(() => select(null), [select]);

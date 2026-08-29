@@ -5,7 +5,13 @@ import { useStudioStore } from "@/store/useStudioStore";
 import { Icon } from "./Icon";
 import { Button, ButtonLink } from "./Button";
 import { bust } from "./useStudioPipeline";
-import { resolveSelected, type StudioGraph, type Overview } from "./types";
+import {
+  resolveAssetSelection,
+  resolveSelected,
+  type AssetSelection,
+  type StudioGraph,
+  type Overview,
+} from "./types";
 import { cn } from "@/lib/utils";
 
 type OverviewValues = { title: string; summary: string; plot: string };
@@ -14,28 +20,23 @@ type Props = {
   graph: StudioGraph;
   version: number;
   busy: Record<string, boolean>;
-  onRegenerate: () => void;
   onSaveOverview: (v: OverviewValues) => Promise<void> | void;
-  onCollapse: () => void;
+  onCollapse?: () => void;
 };
 
-const REGEN_BTN =
-  "inline-flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-btn text-[13px] font-semibold text-ink bg-glass-2 border border-hair cursor-pointer transition-colors hover:bg-glass hover:border-white/20 disabled:opacity-60 disabled:cursor-default";
-
-// Primary "Save" button sized identically to REGEN_BTN (full width, same
-// height/padding) so the overview action matches the Regenerate action.
+// Primary overview action.
 const SAVE_BTN =
   "inline-flex items-center justify-center gap-2 w-full px-3.5 py-1.5 rounded-btn text-[13px] font-semibold text-accent-ink border border-transparent cursor-pointer bg-[linear-gradient(180deg,color-mix(in_oklab,var(--accent)_92%,#fff_8%),var(--accent))] transition-[filter] hover:brightness-110 disabled:opacity-60 disabled:cursor-default";
 
 // Compact override of the shared .field style for the dense overview editor.
 const OV_FIELD = "field !text-[13px] !leading-snug !px-3 !py-2 !rounded-[10px]";
 
-function PanelHeader({ onCollapse }: { onCollapse: () => void }) {
+function PanelHeader({ onCollapse }: { onCollapse?: () => void }) {
+  if (!onCollapse) return null;
   return (
-    <div className="flex gap-[14px] px-4 pt-[14px] pb-2.5">
-      <span className="text-[13px] font-semibold text-ink cursor-default">Asset</span>
+    <div className="flex justify-end px-3 pt-3 pb-1">
       <button
-        className="ml-auto grid place-items-center w-[26px] h-[26px] rounded-btn text-ink-3 transition-colors hover:text-ink hover:bg-glass"
+        className="grid place-items-center w-[26px] h-[26px] rounded-btn text-ink-3 transition-colors hover:text-ink hover:bg-glass"
         onClick={onCollapse}
         title="Hide panel"
         aria-label="Hide panel"
@@ -60,17 +61,24 @@ export default function AssetPanel({
   graph,
   version,
   busy,
-  onRegenerate,
   onSaveOverview,
   onCollapse,
 }: Props) {
   const selectedKey = useStudioStore((s) => s.selectedKey);
+  const selectedKeys = useStudioStore((s) => s.selectedKeys);
   const openPlayer = useStudioStore((s) => s.openPlayer);
+  const selections = selectedKeys
+    .map((key) => resolveAssetSelection(graph, key))
+    .filter((selection): selection is AssetSelection => !!selection);
   const detail = resolveSelected(graph, selectedKey);
+
+  if (selections.length > 1) {
+    return <MultiAssetPanel selections={selections} version={version} />;
+  }
 
   if (!detail) {
     return (
-      <aside className="scroll flex flex-col min-h-0 h-full w-[300px] bg-surface-1 overflow-y-auto border-l border-hair pb-6">
+      <aside className="scroll flex flex-col min-h-0 h-full w-[300px] bg-surface-1 overflow-x-hidden overflow-y-auto border-l border-hair pb-6">
         <PanelHeader onCollapse={onCollapse} />
         <div className="px-4 py-6 text-[13px] leading-normal text-ink-2">
           Select a node on the canvas to see its details.
@@ -86,7 +94,7 @@ export default function AssetPanel({
       <OverviewEditor
         overview={detail.overview}
         onSave={onSaveOverview}
-        onCollapse={onCollapse}
+        onCollapse={onCollapse || (() => undefined)}
       />
     );
   }
@@ -97,7 +105,9 @@ export default function AssetPanel({
   let media: string | undefined;
   let video: string | undefined;
   let prompt: string | undefined;
+  let promptLabel = "Description";
   const fields: { label: string; value?: string }[] = [];
+  const selection = selectedKey ? resolveAssetSelection(graph, selectedKey) : null;
 
   if (detail.kind === "character") {
     const c = detail.character;
@@ -109,7 +119,8 @@ export default function AssetPanel({
       { label: "Role", value: c.role || c.meta?.role },
       { label: "Age", value: c.meta?.age ? String(c.meta.age) : undefined },
       { label: "Personality", value: c.meta?.personality },
-      { label: "Backstory", value: c.meta?.backstory }
+      { label: "Backstory", value: c.meta?.backstory },
+      { label: "Used in", value: selection?.usage }
     );
   } else if (detail.kind === "scene") {
     const s = detail.scene;
@@ -117,9 +128,11 @@ export default function AssetPanel({
     typeLabel = "Scene";
     media = s.media;
     prompt = s.meta?.detailed_plot || s.plot;
+    promptLabel = "Story direction";
     fields.push(
       { label: "Summary", value: s.meta?.concise_plot || s.plot },
-      { label: "Dialogue", value: s.meta?.dialogue }
+      { label: "Dialogue", value: s.meta?.dialogue },
+      { label: "Used for", value: selection?.usage }
     );
   } else if (detail.kind === "clip") {
     const c = detail.clip;
@@ -128,22 +141,32 @@ export default function AssetPanel({
     media = c.image_url;
     video = c.video_url;
     prompt = c.meta?.veo3_prompt || c.label;
+    promptLabel = "Generation prompt";
     fields.push(
       { label: "Status", value: c.status },
       { label: "Dialogue", value: c.meta?.dialogue },
-      { label: "Summary", value: c.meta?.summary }
+      { label: "Summary", value: c.meta?.summary },
+      { label: "Used for", value: selection?.usage }
     );
   } else if (detail.kind === "film") {
     title = "Final film";
     typeLabel = "Film";
     video = detail.overview?.finalVideoUrl;
+    prompt = detail.overview?.summary || detail.overview?.plot;
+    promptLabel = "Film summary";
+    const clips = graph.scenes.flatMap((scene) => scene.clips);
+    fields.push(
+      { label: "Scenes", value: String(graph.scenes.length) },
+      { label: "Clips", value: String(clips.length) },
+      { label: "Runtime", value: clips.length ? `${clips.length * 8} seconds` : undefined }
+    );
   }
 
   const previewSrc = bust(media, version);
   const isBusy = !!busy[selectedKey || ""];
 
   return (
-    <aside className="scroll flex flex-col min-h-0 h-full w-[300px] bg-surface-1 overflow-y-auto border-l border-hair pb-6">
+    <aside className="scroll flex flex-col min-h-0 h-full w-[300px] bg-surface-1 overflow-x-hidden overflow-y-auto border-l border-hair pb-6">
       <PanelHeader onCollapse={onCollapse} />
 
       <div
@@ -177,8 +200,8 @@ export default function AssetPanel({
 
       {prompt && (
         <div className="px-4 pt-3 pb-1">
-          <span className="slate">Prompt</span>
-          <p className="mt-[5px] text-[13px] leading-normal text-ink-2 line-clamp-6">
+          <span className="slate">{promptLabel}</span>
+          <p className="mt-[5px] text-[13px] leading-normal text-ink-2 whitespace-pre-wrap">
             {prompt}
           </p>
         </div>
@@ -199,22 +222,6 @@ export default function AssetPanel({
           <Field key={f.label} label={f.label} value={f.value} />
         ))}
       </div>
-
-      {/* Regenerate / Export are functional against the offline mock. */}
-      {(detail.kind === "character" ||
-        detail.kind === "scene" ||
-        detail.kind === "clip") && (
-        <div className="px-4 pt-3.5 pb-1">
-          <button
-            className={cn(REGEN_BTN, "w-full")}
-            onClick={onRegenerate}
-            disabled={isBusy}
-          >
-            <Icon name="refresh" size={15} />
-            <span>{isBusy ? "Working…" : "Regenerate"}</span>
-          </button>
-        </div>
-      )}
 
       {detail.kind === "film" && video && (
         <div className="flex gap-2 px-4 pt-3.5 pb-1">
@@ -239,6 +246,77 @@ export default function AssetPanel({
           </ButtonLink>
         </div>
       )}
+    </aside>
+  );
+}
+
+function MultiAssetPanel({
+  selections,
+  version,
+}: {
+  selections: AssetSelection[];
+  version: number;
+}) {
+  const select = useStudioStore((state) => state.select);
+  const counts = selections.reduce<Record<string, number>>((result, selection) => {
+    const label = selection.kind === "clip" ? "shot" : selection.kind;
+    result[label] = (result[label] || 0) + 1;
+    return result;
+  }, {});
+  const summary = Object.entries(counts)
+    .map(([kind, count]) => `${count} ${kind}${count === 1 ? "" : "s"}`)
+    .join(" · ");
+
+  return (
+    <aside className="scroll flex flex-col min-h-0 h-full w-[300px] bg-surface-1 overflow-x-hidden overflow-y-auto border-l border-hair pb-6">
+      <div className="px-4 pt-5 pb-3 border-b border-hair-2">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[16px] font-bold tracking-[-.01em]">{selections.length} assets selected</div>
+            <div className="mt-1 text-[11px] text-ink-3">{summary}</div>
+          </div>
+          <span className="shrink-0 px-2 py-1 rounded-pill text-[10px] font-semibold text-[var(--motion-accent-bright)] bg-[var(--motion-accent-tint)]">
+            Shared edit
+          </span>
+        </div>
+        <p className="mt-3 text-[12px] leading-normal text-ink-2">
+          The prompt below will carry every selected asset’s stable ID and current metadata as context.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 px-3 py-3">
+        {selections.map((selection) => (
+          <article key={selection.key} className="grid grid-cols-[48px_minmax(0,1fr)_24px] gap-2.5 items-start p-2 rounded-[10px] border border-hair bg-surface-2">
+            <div className="w-12 h-12 overflow-hidden rounded-[8px] grid place-items-center text-ink-3 bg-surface-3">
+              {selection.media ? (
+                <img src={bust(selection.media, version)} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <Icon name={selection.kind === "character" ? "user" : selection.kind === "scene" ? "scene" : selection.kind === "film" ? "play" : "clapper"} size={16} />
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[12px] font-semibold text-ink truncate">{selection.label}</div>
+              <div className="mt-0.5 text-[10px] uppercase tracking-[.04em] text-ink-3">{selection.kind === "clip" ? "Shot" : selection.kind}</div>
+              <p className="mt-1 text-[11px] leading-snug text-ink-2 line-clamp-3">{selection.description}</p>
+            </div>
+            <button
+              type="button"
+              className="w-6 h-6 grid place-items-center rounded-[6px] text-ink-3 hover:text-ink hover:bg-glass"
+              onClick={() => select(selection.key, { additive: true })}
+              aria-label={`Remove ${selection.label} from selection`}
+            >
+              <Icon name="x" size={12} />
+            </button>
+          </article>
+        ))}
+      </div>
+
+      <div className="mx-4 mt-1 pt-3 border-t border-hair-2">
+        <div className="text-[11px] font-semibold text-ink-2">How this edit is scoped</div>
+        <p className="mt-1.5 text-[11px] leading-normal text-ink-3">
+          Project context stays inherited. Only the selected asset prompts are revised, so unrelated cast members and shots remain unchanged.
+        </p>
+      </div>
     </aside>
   );
 }

@@ -29,6 +29,7 @@ import {
   type Clip,
   type ClipStatus,
   type CharN,
+  type ObjectN,
   type SceneN,
   type GNode,
 } from "./types";
@@ -44,6 +45,7 @@ function toGraph(
 ): StudioGraph {
   const rawScenes = (status?.scenes || []) as any[];
   const rawChars = (status?.characters || []) as any[];
+  const rawObjects = (status?.objects || []) as any[];
   const rawFrames = (status?.frames || []) as any[];
 
   const characters: CharN[] = rawChars.map((c, i) => ({
@@ -53,6 +55,13 @@ function toGraph(
     media: c.media_url,
     loading: c.loading === true,
     meta: c.metadata,
+  }));
+
+  const objects: ObjectN[] = rawObjects.map((object, index) => ({
+    id: object.id || `object-${index}`,
+    name: object.metadata?.type || object.metadata?.name || `Object ${index + 1}`,
+    media: object.media_url,
+    meta: object.metadata,
   }));
 
   const byScene = new Map<string, Clip[]>();
@@ -94,7 +103,7 @@ function toGraph(
     status?.completion_status === "complete" ||
     (allClips.length > 0 && allClips.every((c) => c.status === "completed"));
 
-  return { overview, characters, scenes, complete, hasProject: true };
+  return { overview, characters, objects, scenes, complete, hasProject: true };
 }
 
 export type StudioActions = {
@@ -188,6 +197,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
       setGraph({
         overview: baseOverview,
         characters: [],
+        objects: [],
         scenes: [],
         complete: false,
         hasProject: !!cur,
