@@ -12,6 +12,12 @@ export interface ProjectContext {
 export interface HierarchicalContext {
   project_summary: string;
   plot: string;
+  references?: Array<{
+    id: string;
+    name: string;
+    url: string;
+    mime_type?: string;
+  }>;
   characters: Array<{
     id: string;
     name: string;
@@ -233,6 +239,14 @@ export function formatContextForPrompt(context: HierarchicalContext): string {
     prompt += `Current Scene:\n`;
     context.scenes.forEach(scene => {
       prompt += `- Scene: ${scene.concise_plot}\n  Details: ${scene.detailed_plot}\n`;
+    });
+    prompt += `\n`;
+  }
+
+  if (context.references && context.references.length > 0) {
+    prompt += `Attached Visual References:\n`;
+    context.references.forEach(reference => {
+      prompt += `- ${reference.name}\n`;
     });
     prompt += `\n`;
   }

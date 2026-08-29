@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { generateText, generateJSON } from '../ai/gemini';
+import { generateTextStream, generateJSON } from '../ai/gemini';
 import { DirectorRequestSchema } from '../models/schemas';
 import { SchemaType, type Schema } from '@google/generative-ai';
 import {
@@ -172,7 +172,15 @@ Provide guidance and any relevant function calls to help the user.
       sendEvent('start', { page_route, timestamp: new Date().toISOString() });
 
       try {
-        const response = await generateText(fullPrompt, systemPrompt);
+        let response = '';
+        for await (const chunk of generateTextStream(fullPrompt, systemPrompt)) {
+          response += chunk;
+          sendEvent('message_delta', {
+            content: chunk,
+            page_route,
+            timestamp: new Date().toISOString()
+          });
+        }
 
         const functionCalls = extractFunctionCalls(response, pageConfig.functions);
 

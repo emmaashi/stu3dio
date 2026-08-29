@@ -45,6 +45,7 @@ export function createQueues() {
   const connection = queueConnection;
 
   const jobTypes: JobType[] = [
+    'agent-orchestration',
     'character-generation',
     'object-generation',
     'scene-generation',
@@ -105,6 +106,33 @@ export async function addJob(jobType: JobType, jobData: JobData): Promise<Job> {
   });
 
   console.log(`➕ Added job: ${jobType} (${job.id})`);
+  if (jobData.run_id) {
+    const { linkJobToAgentRun, publishAgentEvent, upsertAgentTask } = await import('./agentRuns.js');
+    const phase = jobData.phase || 'assets';
+    const label = friendlyJobLabel(jobType, jobData.input_data);
+    await linkJobToAgentRun(jobData.id, {
+      run_id: jobData.run_id,
+      phase,
+      job_type: jobType,
+      label
+    });
+    await upsertAgentTask(jobData.run_id, {
+      id: jobData.id,
+      label,
+      phase: phase as any,
+      job_type: jobType,
+      status: 'queued',
+      progress: 0
+    });
+    await publishAgentEvent(jobData.run_id, 'task.created', {
+      id: jobData.id,
+      label,
+      phase,
+      job_type: jobType,
+      status: 'queued',
+      progress: 0
+    });
+  }
   await updateJobStatus(jobData.id, 'pending', 0);
 
   return job;
@@ -134,6 +162,43 @@ export async function updateJobStatus(
 
   await redis.hSet(key, statusData);
   console.log(`Job ${jobId}: ${status} (${progress}%)`);
+
+  const { getLinkedAgentJob, publishAgentEvent, upsertAgentTask, appendAgentArtifact } = await import('./agentRuns.js');
+  const linked = await getLinkedAgentJob(jobId);
+  if (linked) {
+    const taskStatus = status === 'pending'
+      ? 'queued'
+      : status === 'processing'
+        ? 'running'
+        : status;
+    await upsertAgentTask(linked.run_id, {
+      id: jobId,
+      label: linked.label,
+      phase: linked.phase as any,
+      job_type: linked.job_type,
+      status: taskStatus as any,
+      progress,
+      ...(errorMessage ? { detail: errorMessage } : {}),
+      ...(outputData ? { output: outputData } : {})
+    });
+    await publishAgentEvent(linked.run_id, status === 'failed' ? 'task.failed' : status === 'completed' ? 'task.completed' : 'task.progress', {
+      id: jobId,
+      label: linked.label,
+      phase: linked.phase,
+      job_type: linked.job_type,
+      status: taskStatus,
+      progress,
+      ...(errorMessage ? { detail: errorMessage } : {})
+    });
+
+    if (status === 'completed' && outputData) {
+      const artifact = artifactFromOutput(jobId, linked.job_type, outputData);
+      if (artifact) {
+        await appendAgentArtifact(linked.run_id, artifact);
+        await publishAgentEvent(linked.run_id, 'artifact.created', artifact);
+      }
+    }
+  }
 }
 
 export async function getJobStatus(jobId: string) {
@@ -256,6 +321,7 @@ export function setupJobEventListeners() {
 
 function getJobPriority(jobType: JobType): number {
   const priorities: Record<JobType, number> = {
+    'agent-orchestration': 1,
     'character-generation': 1,
     'object-analysis': 2,
     'object-generation': 3,
@@ -269,4 +335,39 @@ function getJobPriority(jobType: JobType): number {
   };
 
   return priorities[jobType];
+}
+
+function friendlyJobLabel(jobType: JobType, input: Record<string, unknown>): string {
+  const labels: Record<JobType, string> = {
+    'agent-orchestration': 'Coordinate production',
+    'character-generation': `Design ${String(input?.prompt || 'character').split(':')[0]}`,
+    'object-analysis': 'Identify story objects',
+    'object-generation': 'Create object reference',
+    'scene-generation': `Build ${String(input?.scene_description || 'scene')}`,
+    'frame-analysis': 'Plan cinematic shots',
+    'frame-generation': 'Render key frame',
+    'image-editing': 'Apply visual revision',
+    'video-generation': 'Generate 8-second clip',
+    'video-stitching': 'Assemble final film',
+    'script-generation': 'Develop production script'
+  };
+  return labels[jobType];
+}
+
+function artifactFromOutput(
+  jobId: string,
+  jobType: string,
+  output: Record<string, unknown>
+): Record<string, unknown> | null {
+  const url = output.video_url || output.image_url;
+  const entityId = output.character_id || output.scene_id || output.frame_id || jobId;
+  if (!url && !output.character_id && !output.scene_id && !output.frame_id) return null;
+  return {
+    id: String(entityId),
+    job_id: jobId,
+    kind: jobType,
+    title: friendlyJobLabel(jobType as JobType, {}),
+    ...(url ? { url } : {}),
+    created_at: new Date().toISOString()
+  };
 }
