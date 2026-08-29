@@ -63,16 +63,8 @@ export function createLLMWorker() {
     { connection, concurrency: 3 }
   );
 
-  const frameWorker = new Worker(
-    'frame-generation',
-    async (job: Job) => {
-      return processFrameGeneration(job);
-    },
-    { connection, concurrency: 8 }
-  );
-
   console.log('🤖 LLM workers created');
-  return { llmWorker, sceneWorker, frameWorker };
+  return { llmWorker, sceneWorker };
 }
 
 async function enhanceScript(base_plot: string, characters_context: any[], target_scenes: number = 3) {

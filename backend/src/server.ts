@@ -23,7 +23,7 @@ export async function createServer(): Promise<FastifyInstance> {
   await server.register(cors, {
     origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Last-Event-ID']
   });
 
   await server.register(multipart, {

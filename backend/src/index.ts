@@ -6,6 +6,7 @@ import { initAllWorkers } from './workers/index.js';
 import { projectRoutes } from './routes/projects.js';
 import { jobRoutes } from './routes/jobs.js';
 import { directorRoutes } from './routes/director.js';
+import { agentRunRoutes } from './routes/agentRuns.js';
 
 async function bootstrap() {
   try {
@@ -29,6 +30,7 @@ async function bootstrap() {
     await server.register(projectRoutes);
     await server.register(jobRoutes);
     await server.register(directorRoutes);
+    await server.register(agentRunRoutes);
 
     server.register(async function (fastify) {
       await fastify.register(require('@fastify/static'), {
