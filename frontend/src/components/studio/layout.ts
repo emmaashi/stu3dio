@@ -12,23 +12,23 @@
 import type { StudioGraph, GNode, GEdge } from "./types";
 
 const LABEL_X = 28; // lane label gutter
-const LEFT_PAD = 168; // where node content starts (room for labels)
+const LEFT_PAD = 64; // where node content starts (room for labels)
 const TOP_PAD = 64;
-const BAND_GAP = 84;
+const BAND_GAP = 100;
 
-const CW = 160,
-  CH = 96; // cast card
-const SPINE_W = 196,
-  SPINE_H = 112; // concept + scene cards
-const BR_W = 156,
-  BR_H = 90, // shot card
-  ROW_GAP = 14;
-const CHAR_GAP = 22;
-const COL_GAP = 248;
+const CW = 192,
+  CH = 202; // cast card
+const SPINE_W = 240,
+  SPINE_H = 196; // concept + scene cards
+const BR_W = 216,
+  BR_H = 178, // shot card
+  ROW_GAP = 32;
+const CHAR_GAP = 28;
+const COL_GAP = 300;
 const FILM_W = 256,
-  FILM_H = 150;
+  FILM_H = 214;
 
-export const SCALE_MIN = 0.35,
+export const SCALE_MIN = 0.12,
   SCALE_MAX = 2.2;
 export const clamp = (v: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, v));
@@ -120,7 +120,7 @@ export function buildLayout(graph: StudioGraph) {
     w: SPINE_W,
     h: SPINE_H,
     title: `Scene ${s.order}`,
-    label: s.plot,
+    label: s.meta?.concise_plot || s.plot,
     media: s.media,
     ready: !!s.media,
     loading: s.loading,
