@@ -52,6 +52,7 @@ import { isDemoId } from "@/films";
 import { recordRecent } from "@/lib/recents";
 import FilmPlayer from "@/components/FilmPlayer";
 import WorkspaceBrand from "@/components/studio/WorkspaceBrand";
+import { buildContextOptions } from "@/components/studio/studioContext";
 import "./workspace.css";
 
 function StudioWorkspace() {
@@ -152,23 +153,12 @@ function StudioWorkspace() {
     [graph, selectedKeys],
   );
   const contextOptions = useMemo(
-    () => [
-      ...graph.characters.map((c) => ({
-        id: c.id,
-        label: c.name,
-        kind: "character" as const,
-      })),
-      ...graph.objects.map((o) => ({
-        id: o.id,
-        label: o.name,
-        kind: "object" as const,
-      })),
-      ...graph.scenes.map((s) => ({
-        id: s.id,
-        label: `Scene ${s.order}`,
-        kind: "scene" as const,
-      })),
-    ],
+    () =>
+      buildContextOptions({
+        characters: graph.characters,
+        objects: graph.objects,
+        scenes: graph.scenes,
+      }),
     [graph.characters, graph.objects, graph.scenes],
   );
 

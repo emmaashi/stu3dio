@@ -14,28 +14,26 @@ import type { PromptBarHandle } from "@/components/beautiful-ui/PromptBar";
 import { agentApi } from "@/lib/agentApi";
 import { buildAgentBlocks } from "@/lib/agentBlocks";
 import { useAgentRunStore } from "@/store/useAgentRunStore";
-import type {
-  AgentAttachment,
-  AgentBlock,
-  AgentRun,
-  AgentRunKind,
-} from "@/types/agent";
+import type { AgentAttachment, AgentRun, AgentRunKind } from "@/types/agent";
 import type { AssetSelection, StudioGraph } from "./types";
+import AgentBlockRenderer from "./AgentBlockRenderer";
+import ConversationTranscript from "./ConversationTranscript";
+import { buildContextOptions } from "./studioContext";
+import { buildAgentRunContext, resolveAgentRunKind } from "./agentRunRequest";
 import {
-  ApprovalCard,
-  ArtifactCard,
+  conversationTitle,
+  findAssetConversation,
+  getSelectionSignature,
+  readAssetConversations,
+  toConversationSelection,
+  writeAssetConversations,
+  type AssetConversation,
+} from "./assetConversations";
+import {
   ConversationNav,
-  ContextCards,
-  DiffTable,
   FineTuneCard,
-  InsightCards,
   LoadingState,
   PromptBar,
-  RecommendationCard,
-  StreamingText,
-  TaskRows,
-  ThinkingState,
-  ToolChips,
   type ConversationSummary,
   type FineTuneValues,
 } from "@/components/beautiful-ui";
@@ -78,42 +76,6 @@ const ACTIVE_STATUSES = new Set<AgentRun["status"]>([
   "running",
   "awaiting_approval",
 ]);
-
-type ConversationMessage = { role: "user" | "assistant"; content: string };
-type AssetConversation = ConversationSummary & {
-  selection: Array<{
-    key: string;
-    label: string;
-    kind: AssetSelection["kind"];
-  }>;
-  messages: ConversationMessage[];
-  updatedAt: string;
-};
-
-function conversationTitle(prompt: string) {
-  const clean = prompt.replace(/^\/[\w-]+\s*/, "").trim();
-  if (!clean) return "Current conversation";
-  return clean.length > 34 ? `${clean.slice(0, 34).trimEnd()}…` : clean;
-}
-
-function readAssetConversations(projectId: string): AssetConversation[] {
-  try {
-    const parsed = JSON.parse(
-      window.localStorage.getItem(`stu3dio:asset-conversations:${projectId}`) ||
-        "[]",
-    );
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (conversation) =>
-        conversation &&
-        typeof conversation.id === "string" &&
-        Array.isArray(conversation.selection) &&
-        Array.isArray(conversation.messages),
-    );
-  } catch {
-    return [];
-  }
-}
 
 const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
   {
@@ -164,7 +126,6 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     assetConversations.find(
       (conversation) => conversation.id === selectedConversationId,
     ) || null;
-  const selectedConversation = selectedAssetConversation;
   const conversations = useMemo<ConversationSummary[]>(
     () => [
       ...(run
@@ -188,35 +149,17 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
   );
   const showRun = !!run && selectedConversationId === "current";
   const reducedMotion = useReducedMotion();
-  const selectionSignature = selectedAssets
-    .map((asset) => asset.key)
-    .sort()
-    .join("|");
+  const selectionSignature = getSelectionSignature(selectedAssets);
   const activeAssetSelection =
     selectedAssetConversation?.selection ||
-    selectedAssets.map((asset) => ({
-      key: asset.key,
-      label: asset.label,
-      kind: asset.kind,
-    }));
+    toConversationSelection(selectedAssets);
   const contextOptions = useMemo(
-    () => [
-      ...graph.characters.map((character) => ({
-        id: character.id,
-        label: character.name,
-        kind: "character" as const,
-      })),
-      ...graph.objects.map((object) => ({
-        id: object.id,
-        label: object.name,
-        kind: "object" as const,
-      })),
-      ...graph.scenes.map((scene) => ({
-        id: scene.id,
-        label: `Scene ${scene.order}`,
-        kind: "scene" as const,
-      })),
-    ],
+    () =>
+      buildContextOptions({
+        characters: graph.characters,
+        objects: graph.objects,
+        scenes: graph.scenes,
+      }),
     [graph.characters, graph.objects, graph.scenes],
   );
 
@@ -259,11 +202,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
       return;
     }
     const conversation = assetConversations.find(
-      (item) =>
-        item.selection
-          .map((asset) => asset.key)
-          .sort()
-          .join("|") === selectionSignature,
+      (item) => getSelectionSignature(item.selection) === selectionSignature,
     );
     setSelectedConversationId(conversation?.id || null);
     if (selectionSignature === "overview") {
@@ -325,15 +264,12 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     showHistory = false,
   ) => {
     if (submitting || disabled) return;
-    const commandKind: AgentRunKind =
-      forcedKind ||
-      (text.startsWith("/assemble")
-        ? "assemble-film"
-        : text.startsWith("/plan")
-          ? "plan-scenes"
-          : selectedLabel || !isNewVideo
-            ? "enhance"
-            : "create-film");
+    const commandKind = resolveAgentRunKind(
+      text,
+      isNewVideo,
+      selectedLabel,
+      forcedKind,
+    );
     setSubmitting(true);
     setSelectedConversationId("current");
     setHistoryOpen(showHistory);
@@ -342,31 +278,12 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
       const snapshot = await agentApi.create(projectId, {
         prompt: text,
         kind: commandKind,
-        context: {
-          selected_artifact: selectedLabel || null,
-          selected_assets: selectedAssets.map((asset) => ({
-            id: asset.id,
-            key: asset.key,
-            kind: asset.kind,
-            label: asset.label,
-            description: asset.description,
-            context: asset.context,
-          })),
-          project: graph.overview,
-          visible_characters: graph.characters.map((character) => ({
-            id: character.id,
-            name: character.name,
-          })),
-          visible_objects: graph.objects.map((object) => ({
-            id: object.id,
-            name: object.name,
-          })),
-          visible_scenes: graph.scenes.map((scene) => ({
-            id: scene.id,
-            order: scene.order,
-          })),
+        context: buildAgentRunContext({
+          graph,
+          selectedAssets,
+          selectedLabel,
           attachments,
-        },
+        }),
       });
       window.localStorage.setItem(
         `stu3dio:agent-run:${projectId}`,
@@ -427,10 +344,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
   ) => {
     setAssetConversations((current) => {
       const next = update(current);
-      window.localStorage.setItem(
-        `stu3dio:asset-conversations:${projectId}`,
-        JSON.stringify(next),
-      );
+      writeAssetConversations(projectId, next);
       return next;
     });
   };
@@ -441,28 +355,13 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     showHistory = false,
   ) => {
     if (!selection.length || editingSelected || disabled) return;
-    const signature = selection
-      .map((asset) => asset.key)
-      .sort()
-      .join("|");
-    const activeConversation = assetConversations.find(
-      (conversation) =>
-        conversation.id === selectedConversationId &&
-        conversation.selection
-          .map((asset) => asset.key)
-          .sort()
-          .join("|") === signature,
-    );
-    const reusable = !forceNewConversation.current
-      ? activeConversation ||
-        assetConversations.find(
-          (conversation) =>
-            conversation.selection
-              .map((asset) => asset.key)
-              .sort()
-              .join("|") === signature,
-        )
-      : null;
+    const reusable = forceNewConversation.current
+      ? undefined
+      : findAssetConversation(
+          assetConversations,
+          selection,
+          selectedConversationId,
+        );
     const conversationId = reusable?.id || crypto.randomUUID();
     const timestamp = new Date().toISOString();
     const title =
@@ -552,14 +451,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
   };
 
   const editSelected = (text: string) =>
-    submitAssetPrompt(
-      text,
-      selectedAssets.map((asset) => ({
-        key: asset.key,
-        label: asset.label,
-        kind: asset.kind,
-      })),
-    );
+    submitAssetPrompt(text, toConversationSelection(selectedAssets));
 
   const fineTune = (values: FineTuneValues) => {
     const prompt = `Adjust ${selectedLabel || "the selected asset"}: ${values.framing}, ${values.camera}, style intensity ${values.style}, prompt emphasis ${values.emphasis}.`;
@@ -602,11 +494,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
   useImperativeHandle(ref, () => ({
     closeConversations: () => setRailOpen(false),
     submitPrompt: (text, attachments = []) => {
-      const selection = selectedAssets.map((asset) => ({
-        key: asset.key,
-        label: asset.label,
-        kind: asset.kind,
-      }));
+      const selection = toConversationSelection(selectedAssets);
       setRailOpen(true);
       if (selectedAssets.some((asset) => asset.editable))
         void submitAssetPrompt(text, selection, false);
@@ -671,13 +559,15 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
             className="studio-conversation-messages"
             aria-label="Conversation messages"
           >
-            {selectedConversation && (
-              <ConversationTranscript conversation={selectedConversation} />
+            {selectedAssetConversation && (
+              <ConversationTranscript
+                conversation={selectedAssetConversation}
+              />
             )}
-            {!selectedConversation &&
+            {!selectedAssetConversation &&
               showRun &&
               blocks.map((block) => (
-                <BlockRenderer
+                <AgentBlockRenderer
                   key={block.id}
                   block={block}
                   busy={submitting}
@@ -686,7 +576,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
                   onRecommendation={handleRecommendation}
                 />
               ))}
-            {!selectedConversation && !showRun && (
+            {!selectedAssetConversation && !showRun && (
               <div className="studio-conversation-empty">
                 <MessagesSquare size={18} />
                 <h2>
@@ -708,12 +598,12 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
                 variant="orbit"
               />
             )}
-            {!selectedConversation && connectionError && (
+            {!selectedAssetConversation && connectionError && (
               <div className="agent-connection-note" role="alert">
                 {connectionError}
               </div>
             )}
-            {editError && !selectedConversation && (
+            {editError && !selectedAssetConversation && (
               <p className="studio-save-error" role="alert">
                 {editError}
               </p>
@@ -792,10 +682,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
               (item) => item.id === id,
             );
             previousSelection.current = conversation
-              ? conversation.selection
-                  .map((asset) => asset.key)
-                  .sort()
-                  .join("|")
+              ? getSelectionSignature(conversation.selection)
               : "";
             onSelectAssets?.(
               conversation
@@ -812,131 +699,3 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
 });
 
 export default AgentRail;
-
-function ConversationTranscript({
-  conversation,
-}: {
-  conversation: {
-    title: string;
-    messages: ConversationMessage[];
-    selection?: AssetConversation["selection"];
-  };
-}) {
-  return (
-    <div className="agent-conversation-preview">
-      <div>
-        <span>Conversation</span>
-        <h2>{conversation.title}</h2>
-        {conversation.selection && (
-          <div
-            className="agent-conversation-context"
-            aria-label="Assets in this conversation"
-          >
-            {conversation.selection.map((asset) => (
-              <span key={asset.key}>{asset.label}</span>
-            ))}
-          </div>
-        )}
-      </div>
-      {conversation.messages.map((message, index) =>
-        message.role === "user" ? (
-          <div key={index} className="agent-user-message">
-            {message.content}
-          </div>
-        ) : (
-          <div key={index} className="agent-stream">
-            <p>{message.content}</p>
-          </div>
-        ),
-      )}
-    </div>
-  );
-}
-
-function BlockRenderer({
-  block,
-  busy,
-  onApproval,
-  onPlay,
-  onRecommendation,
-}: {
-  block: AgentBlock;
-  busy: boolean;
-  onApproval: (
-    decision: "approve" | "revise" | "cancel",
-    values: Record<string, unknown>,
-    feedback?: string,
-  ) => void;
-  onPlay: (url: string) => void;
-  onRecommendation: (id: string) => void;
-}) {
-  switch (block.type) {
-    case "loading":
-      return (
-        <LoadingState
-          label={block.label}
-          startedAt={block.startedAt}
-          variant="orbit"
-        />
-      );
-    case "thinking":
-      return (
-        <ThinkingState
-          label={block.label}
-          activities={block.activities}
-          active={block.active}
-        />
-      );
-    case "streaming-message":
-      return (
-        <StreamingText
-          role={block.role}
-          content={block.content}
-          status={block.status}
-        />
-      );
-    case "approval":
-      return (
-        <ApprovalCard
-          approval={block.approval}
-          busy={busy}
-          onApprove={(values) => onApproval("approve", values)}
-          onRevise={(values, feedback) =>
-            onApproval("revise", values, feedback)
-          }
-          onCancel={() => onApproval("cancel", block.approval.values)}
-        />
-      );
-    case "tool-group":
-      return <ToolChips tools={block.tools} />;
-    case "task-group":
-      return <TaskRows tasks={block.tasks} />;
-    case "context":
-      return <ContextCards data={block.data} />;
-    case "diff":
-      return <DiffTable data={block.data} />;
-    case "recommendation":
-      return (
-        <RecommendationCard data={block.data} onAction={onRecommendation} />
-      );
-    case "insight":
-      return <InsightCards data={block.data} />;
-    case "artifact":
-      return (
-        <ArtifactCard
-          data={block.data}
-          onOpen={(data) => {
-            const url = String(data.url || "");
-            if (url && String(data.kind || "").includes("video")) onPlay(url);
-          }}
-        />
-      );
-    case "error":
-      return (
-        <div className="agent-error-card">
-          <strong>Production stopped</strong>
-          <p>{block.message}</p>
-        </div>
-      );
-  }
-}

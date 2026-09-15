@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import type { AgentAttachment } from "@/types/agent";
 
-type ContextOption = {
+export type ContextOption = {
   id: string;
   label: string;
   kind: "character" | "object" | "scene";
