@@ -476,7 +476,6 @@ function makeConceptApproval(values: Record<string, unknown>): AgentApproval {
       { id: 'visual_style', label: 'Visual style', type: 'text', required: true },
       { id: 'audio_direction', label: 'Audio direction', type: 'text', required: true },
       { id: 'runtime_seconds', label: 'Runtime', type: 'single-select', options: [24, 64, 96] },
-      { id: 'aspect_ratio', label: 'Aspect ratio', type: 'single-select', options: ['16:9', '9:16', '1:1'] },
       { id: 'characters', label: 'Cast', type: 'summary-list' }
     ],
     created_at: new Date().toISOString()

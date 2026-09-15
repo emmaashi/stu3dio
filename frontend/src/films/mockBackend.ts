@@ -3,19 +3,19 @@
 // timers: a new film becomes a concept, cast, scenes, shots, then a final film.
 
 import {
-  HP_PLOT_POINTS,
-  HP_PROMPT,
-  HP_TITLE,
-  HP_SCENES_OVERVIEW,
-  HP_DIRECTOR_REPLY,
-  HP_CHARACTERS,
-  HP_SCENES,
-  HP_SHOT_STILLS,
-  HP_CLIP_VIDEO,
-  HP_FINAL_VIDEO,
-  HP_POSTER,
-  hpCharacterByName,
-} from "./harry-potter";
+  NEW_FILM_PLOT_POINTS,
+  NEW_FILM_PROMPT,
+  NEW_FILM_TITLE,
+  NEW_FILM_SCENES_OVERVIEW,
+  NEW_FILM_DIRECTOR_REPLY,
+  NEW_FILM_CHARACTERS,
+  NEW_FILM_SCENES,
+  NEW_FILM_SHOT_STILLS,
+  NEW_FILM_CLIP_VIDEO,
+  NEW_FILM_FINAL_VIDEO,
+  NEW_FILM_POSTER,
+  newFilmCharacterByName,
+} from "./tears-of-steel/newFilm";
 import type { AgentApproval, AgentEvent, AgentRun } from "@/types/agent";
 
 let enabled = false;
@@ -205,7 +205,7 @@ export function subscribeMockAgentRun(
 }
 
 function mockCharacters() {
-  return HP_CHARACTERS.map((c) => ({
+  return NEW_FILM_CHARACTERS.map((c) => ({
     name: c.name,
     role: c.role,
     age: c.age,
@@ -216,12 +216,12 @@ function mockCharacters() {
 }
 
 function createMockConceptApproval(prompt: string): AgentApproval {
-  const premise = prompt || HP_PROMPT;
+  const premise = prompt || NEW_FILM_PROMPT;
   const values = {
-    title: HP_TITLE,
-    logline: HP_PLOT_POINTS[0],
-    summary: HP_PLOT_POINTS[0],
-    story_direction: `${premise}\n\n${HP_PLOT_POINTS.join("\n\n")}`,
+    title: NEW_FILM_TITLE,
+    logline: NEW_FILM_PLOT_POINTS[0],
+    summary: NEW_FILM_PLOT_POINTS[0],
+    story_direction: `${premise}\n\n${NEW_FILM_PLOT_POINTS.join("\n\n")}`,
     visual_style: "Cinematic realism with expressive contrast and deliberate camera movement",
     audio_direction: "Atmospheric score, focused dialogue, and tactile environmental sound",
     runtime_seconds: 64,
@@ -240,7 +240,6 @@ function createMockConceptApproval(prompt: string): AgentApproval {
       { id: "story_direction", label: "Story direction", type: "textarea" },
       { id: "visual_style", label: "Visual style", type: "text" },
       { id: "runtime_seconds", label: "Runtime", type: "single-select", options: [24, 64, 96] },
-      { id: "aspect_ratio", label: "Aspect ratio", type: "single-select", options: ["16:9", "9:16", "1:1"] },
       { id: "characters", label: "Cast", type: "summary-list" },
     ],
     values,
@@ -250,7 +249,7 @@ function createMockConceptApproval(prompt: string): AgentApproval {
 
 function createMockProductionApproval(_prompt: string): AgentApproval {
   const counts = [3, 2, 3];
-  const scenes = HP_SCENES.map((scene, index) => ({
+  const scenes = NEW_FILM_SCENES.map((scene, index) => ({
     id: `scene-${index + 1}`,
     scene_order: index + 1,
     title: scene.title,
@@ -260,7 +259,7 @@ function createMockProductionApproval(_prompt: string): AgentApproval {
     target_frames: counts[index],
     duration: (counts[index] || 1) * 8,
   }));
-  const values = { overview: HP_SCENES_OVERVIEW, scenes };
+  const values = { overview: NEW_FILM_SCENES_OVERVIEW, scenes };
   return {
     id: uid(),
     kind: "production_plan" as const,
@@ -291,7 +290,8 @@ function materializeMockProduction(run: AgentRun) {
     emitAgent(run.id, "task.completed", task);
     if (!store.characters.some((item) => item.metadata.name === name)) {
       store.characters.push({
-        id: uid(), project_id: store.project.id, media_url: portraitFor(index),
+        id: uid(), project_id: store.project.id,
+        media_url: newFilmCharacterByName(name)?.media || portraitFor(index),
         metadata: {
           name,
           role: String(character.role || "Supporting"),
@@ -330,7 +330,7 @@ function materializeMockProduction(run: AgentRun) {
   }, 550);
 
   setTimeout(() => {
-    for (const frame of store.frames) frame.video_url = HP_CLIP_VIDEO;
+    for (const frame of store.frames) frame.video_url = NEW_FILM_CLIP_VIDEO;
     emitAgent(run.id, "task.progress", { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "completed", progress: 100, completed: 8, total: 8 });
     emitAgent(run.id, "activity.completed", { id: "mock-video", label: "8 clips ready for assembly", phase: "videos" });
     emitAgent(run.id, "insight.created", { id: uid(), title: "Production ready", metrics: [{ label: "Scenes", value: 3 }, { label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Audio", value: "Generated" }] });
@@ -372,11 +372,11 @@ function ensureStore(id: string): Store {
 }
 
 // Hardcoded "prompt -> film" demo: whatever the user types, the director shapes
-// it into Harry Potter and the Philosopher's Stone so the full flow can play
-// without any API keys. (Swap this fixture out once real generation is wired.)
+// it into Tears of Steel so the full flow can play without any API keys.
+// (Swap this fixture out once real generation is wired.)
 function makeConverseResponse(store: Store, _message: string) {
-  const plot_points = HP_PLOT_POINTS;
-  const characters = HP_CHARACTERS.map((c) => ({
+  const plot_points = NEW_FILM_PLOT_POINTS;
+  const characters = NEW_FILM_CHARACTERS.map((c) => ({
     name: c.name,
     role: c.role,
     age: c.age,
@@ -384,7 +384,7 @@ function makeConverseResponse(store: Store, _message: string) {
     personality: c.personality,
     backstory: c.backstory,
   }));
-  const response = HP_DIRECTOR_REPLY;
+  const response = NEW_FILM_DIRECTOR_REPLY;
   store.project.plot =
     `Plot:\n${plot_points.join("\n\n")}\n\nCharacters:\n` +
     characters.map((c) => `${c.name} (${c.role}): ${c.description}`).join("\n");
@@ -432,8 +432,8 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
   // Pull shot stills from THIS scene's curated pool so each shot matches the
   // scene (train shots under the Express, cloister shots under the corridor),
   // rather than a global rotating pool that mixed unrelated locations.
-  const hp = HP_SCENES[(scene.metadata.scene_order - 1) % HP_SCENES.length];
-  const pool = hp?.shots?.length ? hp.shots : HP_SHOT_STILLS;
+  const fixture = NEW_FILM_SCENES[(scene.metadata.scene_order - 1) % NEW_FILM_SCENES.length];
+  const pool = fixture?.shots?.length ? fixture.shots : NEW_FILM_SHOT_STILLS;
   for (let i = 0; i < count; i++) {
     const id = uid();
     store.shotSeq += 1;
@@ -460,7 +460,7 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
     // Auto-generate the clip shortly after so the pipeline reaches completion
     // without manual triggering — staggered per shot so they fill in one by one.
     setTimeout(() => {
-      frame.video_url = HP_CLIP_VIDEO;
+      frame.video_url = NEW_FILM_CLIP_VIDEO;
       frame.updated_at = nowISO();
     }, 1400 + i * 600 + Math.random() * 400);
   }
@@ -608,12 +608,12 @@ export async function handleMock(
       emitAgent(run.id, "run.status", { status: "running", phase: "assembly" });
       emitAgent(run.id, "activity.started", { id: "mock-assembly", label: "Assembling the final film", phase: "assembly" });
       setTimeout(() => {
-        store.project.final_video_url = HP_FINAL_VIDEO;
-        store.project.poster_url = HP_POSTER;
+        store.project.final_video_url = NEW_FILM_FINAL_VIDEO;
+        store.project.poster_url = NEW_FILM_POSTER;
         run.status = "completed";
         emitAgent(run.id, "activity.completed", { id: "mock-assembly", label: "Final film assembled", phase: "assembly" });
-        emitAgent(run.id, "insight.created", { id: uid(), title: "Your film is ready", metrics: [{ label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Format", value: "16:9" }], artifact_url: HP_FINAL_VIDEO });
-        emitAgent(run.id, "run.completed", { video_url: HP_FINAL_VIDEO });
+        emitAgent(run.id, "insight.created", { id: uid(), title: "Your film is ready", metrics: [{ label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Format", value: "16:9" }], artifact_url: NEW_FILM_FINAL_VIDEO });
+        emitAgent(run.id, "run.completed", { video_url: NEW_FILM_FINAL_VIDEO });
         emitAgent(run.id, "run.status", { status: "completed", phase: "assembly" });
       }, 850);
     }
@@ -654,8 +654,8 @@ export async function handleMock(
   if (method === "POST" && (m = path.match(/^\/api\/projects\/([^/]+)\/confirm-video$/))) {
     const s = ensureStore(m[1]);
     const job_id = startJob("video-stitching", () => {
-      s.project.final_video_url = HP_FINAL_VIDEO;
-      s.project.poster_url = HP_POSTER;
+      s.project.final_video_url = NEW_FILM_FINAL_VIDEO;
+      s.project.poster_url = NEW_FILM_POSTER;
       s.project.updated_at = nowISO();
     });
     return { message: "Video assembly started", job_id };
@@ -739,8 +739,8 @@ export async function handleMock(
     const ctx = body.context || {};
     const name = ctx.name || body.name || "Character";
     // The director only forwards name/role/description, so the mock owns the
-    // rich HP metadata + the real portrait (matched by name).
-    const hp = hpCharacterByName(name);
+    // rich fixture metadata + the real portrait (matched by name).
+    const fixture = newFilmCharacterByName(name);
     const id = uid();
     const portraitIndex = s.characters.length;
     s.characters.push({
@@ -750,16 +750,16 @@ export async function handleMock(
       loading: true,
       metadata: {
         name,
-        role: hp?.role || ctx.role || "Supporting",
-        age: hp?.age ?? (typeof ctx.age === "number" && ctx.age > 0 ? ctx.age : 30),
-        description: hp?.description || ctx.description || body.prompt || "A key character.",
-        personality: hp?.personality || ctx.personality || "Distinct and memorable.",
-        backstory: hp?.backstory || ctx.backstory || "Has a history that informs their choices.",
+        role: fixture?.role || ctx.role || "Supporting",
+        age: fixture?.age ?? (typeof ctx.age === "number" && ctx.age > 0 ? ctx.age : 30),
+        description: fixture?.description || ctx.description || body.prompt || "A key character.",
+        personality: fixture?.personality || ctx.personality || "Distinct and memorable.",
+        backstory: fixture?.backstory || ctx.backstory || "Has a history that informs their choices.",
       },
       created_at: nowISO(),
       updated_at: nowISO(),
     });
-    const portrait = hp?.media || portraitFor(portraitIndex);
+    const portrait = fixture?.media || portraitFor(portraitIndex);
     // Stagger the cast so portraits resolve one after another.
     const job_id = startJob(
       "character-generation",
@@ -780,7 +780,7 @@ export async function handleMock(
     const order = body.scene_order || s.sceneCount + 1;
     s.sceneCount = Math.max(s.sceneCount, order);
     const frames = body.target_frames || 2;
-    const hp = HP_SCENES[(order - 1) % HP_SCENES.length];
+    const fixture = NEW_FILM_SCENES[(order - 1) % NEW_FILM_SCENES.length];
     const id = uid();
     const scene: Scene = {
       id,
@@ -789,10 +789,10 @@ export async function handleMock(
       loading: true,
       metadata: {
         scene_order: order,
-        concise_plot: hp?.title || body.scene_description || `Scene ${order}`,
+        concise_plot: fixture?.title || body.scene_description || `Scene ${order}`,
         detailed_plot:
-          hp?.detailed_plot || body.plot_context || `Scene ${order} unfolds.`,
-        dialogue: hp?.dialogue || "",
+          fixture?.detailed_plot || body.plot_context || `Scene ${order} unfolds.`,
+        dialogue: fixture?.dialogue || "",
       },
       created_at: nowISO(),
       updated_at: nowISO(),
@@ -802,7 +802,7 @@ export async function handleMock(
     const job_id = startJob(
       "scene-generation",
       () => {
-        scene.media_url = hp?.media || sceneStill(order - 1);
+        scene.media_url = fixture?.media || sceneStill(order - 1);
         scene.loading = false;
         scene.updated_at = nowISO();
         spawnFramesForScene(s, scene, frames);
@@ -829,7 +829,7 @@ export async function handleMock(
     const job_id = startJob("video-generation", () => {
       const frame = s.frames.find((f) => f.id === frameId);
       if (frame) {
-        frame.video_url = HP_CLIP_VIDEO;
+        frame.video_url = NEW_FILM_CLIP_VIDEO;
         frame.updated_at = nowISO();
       }
     });
@@ -842,7 +842,10 @@ export async function handleMock(
       const rnd = Math.floor(Math.random() * 1000);
       const char = s.characters.find((c) => c.media_url === src);
       if (char) {
-        char.media_url = portraitFor(rnd);
+        const pool = NEW_FILM_SHOT_STILLS.filter((still) => still !== src);
+        char.media_url = pool.length
+          ? pool[rnd % pool.length]
+          : portraitFor(rnd);
         return;
       }
       const scene = s.scenes.find((sc) => sc.media_url === src);
@@ -858,8 +861,8 @@ export async function handleMock(
   if (method === "POST" && path === "/api/jobs/video-stitching") {
     const s = ensureStore(body.project_id);
     const job_id = startJob("video-stitching", () => {
-      s.project.final_video_url = HP_FINAL_VIDEO;
-      s.project.poster_url = HP_POSTER;
+      s.project.final_video_url = NEW_FILM_FINAL_VIDEO;
+      s.project.poster_url = NEW_FILM_POSTER;
       s.project.updated_at = nowISO();
     });
     return { job_id };

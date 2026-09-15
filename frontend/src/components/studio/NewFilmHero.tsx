@@ -6,14 +6,14 @@ import { Icon } from "./Icon";
 import type { StudioActions } from "./useStudioPipeline";
 import type { StudioGraph } from "./types";
 import type { DirectorMessage } from "@/data/directorData";
-import { HP_PROMPT } from "@/films/harry-potter";
+import { NEW_FILM_PROMPT } from "@/films/tears-of-steel/newFilm";
 
 const EASE = [0.22, 0.61, 0.36, 1] as const;
 
 // A few short concepts to give a brand-new film instant momentum. The first is
 // the demo prompt the mock backend has a full hand-authored film for.
 const EXAMPLES = [
-  HP_PROMPT,
+  NEW_FILM_PROMPT,
   "A neon-noir detective mystery",
   "A lonely colonist on Mars",
 ];
@@ -75,7 +75,7 @@ export default function NewFilmHero({ graph, busy, actions, directorLog }: Props
                 autoFocus
                 rows={3}
                 className="w-full resize-none bg-transparent px-3 pt-2.5 text-[14px] leading-relaxed text-ink outline-none placeholder:text-ink-4"
-                placeholder={`${HP_PROMPT}\u2026`}
+                placeholder={`${NEW_FILM_PROMPT}\u2026`}
                 value={text}
                 disabled={directorBusy}
                 onChange={(e) => setText(e.target.value)}
