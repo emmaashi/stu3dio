@@ -1,10 +1,12 @@
 // Adapts the Tears of Steel demo fixture into the shape the mock backend's
 // new-film flow consumes, so creating a film plays the full staged pipeline
-// (concept -> cast -> scenes -> shots -> final film) against a film that is
-// already complete and whose media is all real.
+// (concept -> cast -> scenes -> shots -> final film) and lands on the same
+// complete film the demo project shows: nine characters, ten scenes, and
+// every shot, all with real media.
 //
 // Everything here is derived from the exported fixture data rather than
-// re-listing URLs, so the demo project and the new-film flow cannot drift.
+// re-listing URLs or counts, so the demo project and the new-film flow cannot
+// drift apart.
 
 import {
   DEMO_CHARACTERS,
@@ -14,10 +16,6 @@ import {
   DEMO_PROJECT,
   DEMO_SCENES,
 } from "./index";
-
-// The pipeline generates three scenes with a [3, 2, 3] shot structure, so each
-// scene needs three distinct stills to draw from.
-const SHOTS_PER_SCENE = 3;
 
 export const NEW_FILM_PROMPT =
   "A man is rebuilt from a memory to face the robots his rejection created";
@@ -29,20 +27,6 @@ export const NEW_FILM_FINAL_VIDEO = DEMO_FINAL_FILM_SRC;
 // Shot previews play the same source; the mock has no per-shot renders.
 export const NEW_FILM_CLIP_VIDEO = DEMO_FINAL_FILM_SRC;
 
-// The leads, the plan, and the threat - enough to read as a cast without
-// crowding the canvas with all nine fixture characters.
-const CAST_IDS = [
-  "tos-char-thom",
-  "tos-char-celia",
-  "tos-char-engineer",
-  "tos-char-soldier",
-  "tos-char-sentinel",
-];
-
-// A three-act read of the fixture: the moment that breaks, the plan to undo
-// it, and the confrontation it leads to.
-const SCENE_IDS = ["tos-scene-1", "tos-scene-5", "tos-scene-10"];
-
 export type NewFilmCharacter = {
   name: string;
   role: string;
@@ -53,25 +37,28 @@ export type NewFilmCharacter = {
   media: string;
 };
 
-export const NEW_FILM_CHARACTERS: NewFilmCharacter[] = CAST_IDS.map((id) => {
-  const source = DEMO_CHARACTERS.find((c) => c.id === id);
-  if (!source?.media_url) throw new Error(`Demo character ${id} has no portrait`);
-  return {
-    name: source.metadata.name,
-    role: source.metadata.role,
-    age: source.metadata.age,
-    description: source.metadata.description,
-    personality: source.metadata.personality,
-    backstory: source.metadata.backstory,
-    media: source.media_url,
-  };
-});
-
-// Every still in the film, ordered, used to top up scenes that have fewer
-// frames in the fixture than the pipeline asks for.
-const ALL_STILLS: string[] = DEMO_FRAMES.map((frame) => frame.media_url).filter(
-  (url): url is string => !!url
+// The whole cast, in fixture order.
+export const NEW_FILM_CHARACTERS: NewFilmCharacter[] = DEMO_CHARACTERS.map(
+  (source) => {
+    if (!source.media_url) {
+      throw new Error(`Demo character ${source.id} has no portrait`);
+    }
+    return {
+      name: source.metadata.name,
+      role: source.metadata.role,
+      age: source.metadata.age,
+      description: source.metadata.description,
+      personality: source.metadata.personality,
+      backstory: source.metadata.backstory,
+      media: source.media_url,
+    };
+  }
 );
+
+export type NewFilmShot = {
+  still: string;
+  caption: string;
+};
 
 export type NewFilmScene = {
   title: string;
@@ -79,21 +66,24 @@ export type NewFilmScene = {
   detailed_plot: string;
   dialogue: string;
   media: string;
-  shots: string[];
+  shots: NewFilmShot[];
 };
 
-export const NEW_FILM_SCENES: NewFilmScene[] = SCENE_IDS.map((id) => {
-  const source = DEMO_SCENES.find((s) => s.id === id);
-  if (!source?.media_url) throw new Error(`Demo scene ${id} has no still`);
-
-  // Prefer this scene's own frames, then top up from the wider pool, so a
-  // scene never shows the same still twice.
-  const own = DEMO_FRAMES.filter((f) => f.scene_id === id).map((f) => f.media_url);
-  const shots = [...own];
-  for (const still of ALL_STILLS) {
-    if (shots.length >= SHOTS_PER_SCENE) break;
-    if (!shots.includes(still) && still !== source.media_url) shots.push(still);
+// Every scene, each carrying its own real shots. Shot counts vary per scene
+// exactly as they do in the film (1, 1, 3, 2, 3, 2, 1, 2, 1, 3).
+export const NEW_FILM_SCENES: NewFilmScene[] = DEMO_SCENES.map((source) => {
+  if (!source.media_url) {
+    throw new Error(`Demo scene ${source.id} has no still`);
   }
+  const shots: NewFilmShot[] = DEMO_FRAMES.filter(
+    (frame) => frame.scene_id === source.id
+  )
+    .sort((a, b) => a.metadata.frame_order - b.metadata.frame_order)
+    .flatMap((frame) =>
+      frame.media_url
+        ? [{ still: frame.media_url, caption: frame.metadata.concise_plot }]
+        : []
+    );
 
   return {
     title: source.metadata.concise_plot,
@@ -101,22 +91,35 @@ export const NEW_FILM_SCENES: NewFilmScene[] = SCENE_IDS.map((id) => {
     detailed_plot: source.metadata.detailed_plot,
     dialogue: source.metadata.dialogue,
     media: source.media_url,
-    shots: shots.slice(0, SHOTS_PER_SCENE),
+    shots,
   };
 });
 
-export const NEW_FILM_PLOT_POINTS = NEW_FILM_SCENES.map(
-  (scene) => scene.detailed_plot
+// Shot counts per scene, in scene order — the shape the production plan and
+// the scene-generation jobs both need.
+export const NEW_FILM_SHOT_COUNTS: number[] = NEW_FILM_SCENES.map(
+  (scene) => scene.shots.length
 );
 
-export const NEW_FILM_SCENES_OVERVIEW =
-  "Three acts across eight shots: the moment on the bridge, the resistance's impossible plan, and the confrontation among the fallen machines.";
+export const NEW_FILM_TOTAL_SHOTS = NEW_FILM_SHOT_COUNTS.reduce(
+  (total, count) => total + count,
+  0
+);
+
+export const NEW_FILM_PLOT_POINTS = [
+  DEMO_PROJECT.summary,
+  ...NEW_FILM_SCENES.map((scene) => scene.detailed_plot),
+];
+
+export const NEW_FILM_SCENES_OVERVIEW = `${NEW_FILM_SCENES.length} scenes across ${NEW_FILM_TOTAL_SHOTS} shots: from a spring afternoon on an Amsterdam bridge to a last confrontation among the fallen machines.`;
 
 export const NEW_FILM_DIRECTOR_REPLY =
-  "Love it, a machine-age tragedy built on one human flinch. I've shaped it into Tears of Steel: three acts running from the bridge in Amsterdam to a last confrontation among the wreckage, with a cast of leads, engineers, and the machines themselves. The plot and cast are sketched below. Hit “Generate the cast” when you're ready and we'll build it stage by stage.";
+  "Love it, a machine-age tragedy built on one human flinch. I've shaped it into Tears of Steel: a full arc running from the bridge in Amsterdam, through the rise of the machines and the resistance's impossible plan, to a last confrontation among the wreckage. The plot and cast are sketched below. Hit “Generate the cast” when you're ready and we'll build it stage by stage.";
 
-// Shared pool for any shot the scene-level lists don't cover.
-export const NEW_FILM_SHOT_STILLS: string[] = ALL_STILLS;
+// Shared pool for any shot a scene-level list doesn't cover.
+export const NEW_FILM_SHOT_STILLS: string[] = DEMO_FRAMES.flatMap((frame) =>
+  frame.media_url ? [frame.media_url] : []
+);
 
 export function newFilmCharacterByName(
   name?: string

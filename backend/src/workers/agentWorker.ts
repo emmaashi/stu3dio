@@ -475,7 +475,6 @@ function makeConceptApproval(values: Record<string, unknown>): AgentApproval {
       { id: 'story_direction', label: 'Story direction', type: 'textarea', required: true },
       { id: 'visual_style', label: 'Visual style', type: 'text', required: true },
       { id: 'audio_direction', label: 'Audio direction', type: 'text', required: true },
-      { id: 'runtime_seconds', label: 'Runtime', type: 'single-select', options: [24, 64, 96] },
       { id: 'characters', label: 'Cast', type: 'summary-list' }
     ],
     created_at: new Date().toISOString()

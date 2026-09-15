@@ -11,6 +11,8 @@ import {
   NEW_FILM_CHARACTERS,
   NEW_FILM_SCENES,
   NEW_FILM_SHOT_STILLS,
+  NEW_FILM_SHOT_COUNTS,
+  NEW_FILM_TOTAL_SHOTS,
   NEW_FILM_CLIP_VIDEO,
   NEW_FILM_FINAL_VIDEO,
   NEW_FILM_POSTER,
@@ -239,7 +241,6 @@ function createMockConceptApproval(prompt: string): AgentApproval {
       { id: "title", label: "Title", type: "text" },
       { id: "story_direction", label: "Story direction", type: "textarea" },
       { id: "visual_style", label: "Visual style", type: "text" },
-      { id: "runtime_seconds", label: "Runtime", type: "single-select", options: [24, 64, 96] },
       { id: "characters", label: "Cast", type: "summary-list" },
     ],
     values,
@@ -248,7 +249,7 @@ function createMockConceptApproval(prompt: string): AgentApproval {
 }
 
 function createMockProductionApproval(_prompt: string): AgentApproval {
-  const counts = [3, 2, 3];
+  const counts = NEW_FILM_SHOT_COUNTS;
   const scenes = NEW_FILM_SCENES.map((scene, index) => ({
     id: `scene-${index + 1}`,
     scene_order: index + 1,
@@ -337,7 +338,7 @@ function materializeMockProduction(run: AgentRun) {
     const approval = {
       id: uid(), kind: "assembly" as const, title: "Assemble the final film?",
       description: "8 clips are ready. Stu3dio will join them into a 64-second cut.",
-      status: "pending" as const, fields: [], values: { clips: 8, runtime_seconds: 64, aspect_ratio: "16:9", audio: "generated" }, created_at: nowISO()
+      status: "pending" as const, fields: [], values: { clips: NEW_FILM_TOTAL_SHOTS, runtime_seconds: 64, aspect_ratio: "16:9", audio: "generated" }, created_at: nowISO()
     };
     run.approval = approval;
     run.status = "awaiting_approval";
@@ -429,27 +430,30 @@ function startJob(
 }
 
 function spawnFramesForScene(store: Store, scene: Scene, count: number) {
-  // Pull shot stills from THIS scene's curated pool so each shot matches the
-  // scene (train shots under the Express, cloister shots under the corridor),
-  // rather than a global rotating pool that mixed unrelated locations.
+  // Pull shots from THIS scene's own frames so each shot matches the scene and
+  // carries the caption the film gives it, rather than a global rotating pool
+  // that mixed unrelated locations behind a generated "Shot N" label.
   const fixture = NEW_FILM_SCENES[(scene.metadata.scene_order - 1) % NEW_FILM_SCENES.length];
-  const pool = fixture?.shots?.length ? fixture.shots : NEW_FILM_SHOT_STILLS;
+  const shots = fixture?.shots?.length
+    ? fixture.shots
+    : NEW_FILM_SHOT_STILLS.map((still) => ({ still, caption: "" }));
   for (let i = 0; i < count; i++) {
     const id = uid();
     store.shotSeq += 1;
-    const shot = pool[i % pool.length];
+    const shot = shots[i % shots.length];
+    const caption = shot.caption || `${scene.metadata.concise_plot} (beat ${i + 1})`;
     const frame: Frame = {
       id,
       project_id: store.project.id,
       scene_id: scene.id,
-      media_url: shot,
+      media_url: shot.still,
       video_url: "",
       metadata: {
         frame_order: i,
         scene_order: scene.metadata.scene_order,
-        concise_plot: `Shot ${i + 1} · ${scene.metadata.concise_plot}`,
-        summary: `${scene.metadata.concise_plot} (beat ${i + 1})`,
-        veo3_prompt: `Cinematic 8s shot: ${scene.metadata.detailed_plot}. Beat ${i + 1}.`,
+        concise_plot: caption,
+        summary: caption,
+        veo3_prompt: `Cinematic 8s shot: ${scene.metadata.detailed_plot}. ${caption}.`,
         dialogue: "",
         duration: 8,
       },
@@ -462,7 +466,7 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
     setTimeout(() => {
       frame.video_url = NEW_FILM_CLIP_VIDEO;
       frame.updated_at = nowISO();
-    }, 1400 + i * 600 + Math.random() * 400);
+    }, 900 + i * 380 + Math.random() * 250);
   }
 }
 
@@ -777,38 +781,47 @@ export async function handleMock(
   }
   if (method === "POST" && path === "/api/jobs/scene-generation") {
     const s = ensureStore(body.project_id);
-    const order = body.scene_order || s.sceneCount + 1;
-    s.sceneCount = Math.max(s.sceneCount, order);
-    const frames = body.target_frames || 2;
-    const fixture = NEW_FILM_SCENES[(order - 1) % NEW_FILM_SCENES.length];
-    const id = uid();
-    const scene: Scene = {
-      id,
-      project_id: s.project.id,
-      media_url: "",
-      loading: true,
-      metadata: {
-        scene_order: order,
-        concise_plot: fixture?.title || body.scene_description || `Scene ${order}`,
-        detailed_plot:
-          fixture?.detailed_plot || body.plot_context || `Scene ${order} unfolds.`,
-        dialogue: fixture?.dialogue || "",
-      },
-      created_at: nowISO(),
-      updated_at: nowISO(),
-    };
-    s.scenes.push(scene);
+    // The caller loops a fixed three times with its own target_frames, but the
+    // demo film is ten scenes with its own shot counts. Materialize the whole
+    // film on the first request; later requests just ride the same reveal.
+    if (s.scenes.length) return { job_id: startJob("scene-generation", () => {}, 300) };
+
+    s.sceneCount = NEW_FILM_SCENES.length;
+    const pending = NEW_FILM_SCENES.map((fixture, index) => {
+      const order = index + 1;
+      const scene: Scene = {
+        id: uid(),
+        project_id: s.project.id,
+        media_url: "",
+        loading: true,
+        metadata: {
+          scene_order: order,
+          concise_plot: fixture.title,
+          detailed_plot: fixture.detailed_plot,
+          dialogue: fixture.dialogue,
+        },
+        created_at: nowISO(),
+        updated_at: nowISO(),
+      };
+      s.scenes.push(scene);
+      return { scene, fixture, order };
+    });
+
     // Scenes resolve after the cast has come in, then fan out into their shots.
-    const job_id = startJob(
-      "scene-generation",
-      () => {
-        scene.media_url = fixture?.media || sceneStill(order - 1);
-        scene.loading = false;
-        scene.updated_at = nowISO();
-        spawnFramesForScene(s, scene, frames);
-      },
-      2800 + (order - 1) * 850 + Math.random() * 300
-    );
+    let job_id = "";
+    pending.forEach(({ scene, fixture, order }, index) => {
+      const id = startJob(
+        "scene-generation",
+        () => {
+          scene.media_url = fixture.media || sceneStill(order - 1);
+          scene.loading = false;
+          scene.updated_at = nowISO();
+          spawnFramesForScene(s, scene, NEW_FILM_SHOT_COUNTS[index] || 1);
+        },
+        1800 + index * 320 + Math.random() * 200
+      );
+      if (!job_id) job_id = id;
+    });
     return { job_id };
   }
   if (method === "POST" && path === "/api/jobs/script-enhancement") {
