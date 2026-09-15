@@ -1,0 +1,430 @@
+.player {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background: #080809;
+  color: #e4e1e9;
+  outline: none;
+  font-family: inherit;
+  --player-accent: #c9b9e8;
+}
+.preview {
+  max-width: 1280px;
+  height: auto;
+  max-height: calc(100dvh - 64px);
+  border: 1px solid #ffffff14;
+  border-radius: 10px;
+  box-shadow: 0 30px 100px #0007;
+}
+.preview .stage {
+  aspect-ratio: var(--film-aspect, 1.77778);
+}
+.preview .stage > video,
+.preview .stage > iframe {
+  position: absolute;
+  inset: 0;
+}
+.preview .controls {
+  position: relative;
+  flex-shrink: 0;
+  padding-top: 0;
+  background: #101012;
+}
+.player:fullscreen {
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 14px 0 20px;
+  height: 48px;
+  min-height: 48px;
+  background: #171719;
+  border-bottom: 1px solid #ffffff07;
+}
+.header > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #c2bdca;
+  font-size: 12px;
+  font-weight: 450;
+}
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.stage > video,
+.stage > iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+}
+.stage > video {
+  cursor: pointer;
+}
+.iconButton {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #c2beca;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.iconButton:hover {
+  background: #ffffff09;
+  color: #fff;
+}
+.iconButton:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.player button:focus-visible,
+.player a:focus-visible,
+.player select:focus-visible {
+  outline: 2px solid var(--player-accent);
+  outline-offset: 2px;
+}
+.centerPlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border: 1px solid #ffffff29;
+  border-radius: 50%;
+  background: #171719a3;
+  color: #eee9f5;
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.centerPlay:hover {
+  background: #29252ecf;
+}
+.centerPlay svg {
+  margin-left: 2px;
+}
+.controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 22px 18px 10px;
+  background: linear-gradient(transparent, #080809df 52%, #080809fa);
+  transition: opacity 0.2s;
+}
+.idle .controls {
+  opacity: 0;
+  pointer-events: none;
+}
+.timeline {
+  position: relative;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  margin: 0 2px 3px;
+}
+.track {
+  position: absolute;
+  width: 100%;
+  height: 2px;
+  border-radius: 3px;
+  background: #ffffff26;
+  overflow: hidden;
+}
+.buffered,
+.progress {
+  position: absolute;
+  height: 100%;
+}
+.buffered {
+  background: #ffffff25;
+}
+.progress {
+  background: var(--player-accent);
+}
+.timeline > input {
+  position: relative;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+.timeline > input:disabled {
+  cursor: default;
+}
+.timeline > input::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 2px;
+}
+.timeline > input::-moz-range-track {
+  background: transparent;
+  height: 2px;
+}
+.timeline > input::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 8px;
+  height: 8px;
+  margin-top: -3px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--player-accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.timeline > input::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--player-accent);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.timeline:hover > input::-webkit-slider-thumb,
+.timeline > input:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.timeline:hover > input::-moz-range-thumb,
+.timeline > input:focus-visible::-moz-range-thumb {
+  opacity: 1;
+}
+.timeline > input:focus-visible {
+  outline: 1px solid #c9b9e855;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+.controlRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.time {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-left: 4px;
+  color: #b8b2c0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.time > span {
+  color: #696270;
+}
+.spacer {
+  flex: 1;
+}
+.volume,
+.options {
+  position: relative;
+}
+.volumePopover {
+  position: absolute;
+  right: -30px;
+  bottom: 100%;
+  padding: 12px 14px;
+  border: 1px solid #ffffff16;
+  border-radius: 7px;
+  background: #222125;
+  box-shadow: 0 6px 20px #0004;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s;
+}
+.volume:hover .volumePopover,
+.volume:focus-within .volumePopover {
+  opacity: 1;
+  visibility: visible;
+}
+.volumePopover input {
+  display: block;
+  width: 90px;
+  height: 14px;
+  accent-color: var(--player-accent);
+  cursor: pointer;
+}
+.optionsPanel {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: 218px;
+  padding: 6px;
+  border: 1px solid #ffffff16;
+  border-radius: 8px;
+  background: #222125;
+  box-shadow: 0 10px 32px #0005;
+  color: #c9c2d1;
+}
+.optionsPanel label,
+.optionsPanel button,
+.optionsPanel a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-size: 11px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+}
+.optionsPanel label {
+  justify-content: space-between;
+  border-bottom: 1px solid #ffffff0a;
+  border-radius: 0;
+  padding-bottom: 12px;
+  margin-bottom: 4px;
+}
+.optionsPanel select {
+  padding: 4px 6px;
+  background: #303036;
+  color: #d4c9df;
+  border: 1px solid #ffffff0d;
+  border-radius: 4px;
+  font: inherit;
+}
+.optionsPanel button,
+.optionsPanel a {
+  cursor: pointer;
+}
+.optionsPanel button:hover,
+.optionsPanel a:hover {
+  background: #ffffff08;
+}
+.optionsPanel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: #0b0b0e;
+  text-align: center;
+}
+.state p {
+  font-size: 15px;
+  font-weight: 450;
+  margin: 0;
+}
+.state span {
+  color: #8d8598;
+  font-size: 12px;
+}
+.state button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  margin-top: 7px;
+  background: #ffffff07;
+  border: 1px solid #ffffff14;
+  color: #c9b9e8;
+  font-size: 11px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.buffering {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  color: #c9b9e8;
+}
+.buffering svg,
+.spin {
+  animation: spin 1s linear infinite;
+}
+.notice {
+  position: absolute;
+  right: 20px;
+  bottom: 96px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 40px);
+  padding: 8px 12px;
+  background: #242128f5;
+  color: #c5b8d2;
+  border: 1px solid #ffffff12;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.notice .iconButton {
+  width: 22px;
+  height: 22px;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 600px) {
+  .preview {
+    max-height: calc(100dvh - 24px);
+    border-radius: 8px;
+  }
+  .header {
+    padding: 0 8px 0 14px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .controls {
+    padding: 20px 10px 10px;
+  }
+  .controlRow {
+    gap: 2px;
+  }
+  .iconButton {
+    width: 36px;
+    height: 36px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .player * {
+    transition: none !important;
+    animation-duration: 2s;
+  }
+}

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "@/components/studio/workspace-shell.css";
 import { Providers } from "./providers";
 
 const inter = Inter({
@@ -21,10 +22,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body
-        className="antialiased"
-        suppressHydrationWarning={true}
-      >
+      <body className="antialiased" suppressHydrationWarning={true}>
         <Providers>{children}</Providers>
       </body>
     </html>
