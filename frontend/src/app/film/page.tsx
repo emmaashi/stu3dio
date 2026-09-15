@@ -7,8 +7,8 @@ import FilmPlayer from "@/components/FilmPlayer";
 function FilmPageContent() {
   const searchParams = useSearchParams();
   
-  // We love big buck boney video
-  const defaultSrc = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
+  // Default to a working, freely-hosted film (old gtv-videos-bucket URLs now 403).
+  const defaultSrc = "https://archive.org/download/Sintel/sintel-2048-surround.mp4";
   const src = searchParams.get("src") || defaultSrc;
   const autoplay = searchParams.get("autoplay") === "1";
   const rate = parseFloat(searchParams.get("rate") || "1");

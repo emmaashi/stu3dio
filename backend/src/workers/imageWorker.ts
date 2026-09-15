@@ -427,7 +427,7 @@ Generate a scene that:
 
     await updateJobStatus(job.id!, 'processing', 85);
 
-    const sceneOrder = 0;
+    const sceneOrder = Number(sceneData.scene_order ?? input_data.scene_order ?? 0);
 
     const scene = await createScene({
       project_id,
@@ -442,7 +442,15 @@ Generate a scene that:
 
     await updateJobStatus(job.id!, 'processing', 95);
 
-    await triggerFrameGeneration(project_id, scene.id, sceneData, contextData, target_frames);
+    await triggerFrameGeneration(
+      project_id,
+      scene.id,
+      sceneData,
+      contextData,
+      target_frames,
+      job.data.run_id,
+      String(job.id || '')
+    );
 
     const characterTokens = contextData.characters.map((c: any) => `<|character_${c.id}|>`);
     const objectTokens = contextData.objects.map((o: any) => `<|object_${o.id}|>`);
@@ -468,7 +476,7 @@ Generate a scene that:
 
 async function processFrameGeneration(job: Job) {
   const { project_id, input_data } = job.data;
-  const { scene_id, scene_metadata, frame_index } = input_data;
+  const { scene_id, scene_metadata, frame_index, scene_context } = input_data;
 
   try {
     await updateJobStatus(job.id!, 'processing', 10);
@@ -480,7 +488,9 @@ async function processFrameGeneration(job: Job) {
 
     // Frames know: characters + current scene + objects
     const currentScene = { id: scene_id, metadata: scene_metadata };
-    const contextData = await buildFrameContext(project_id, currentScene as any);
+    const inheritedContext = await buildFrameContext(project_id, currentScene as any);
+    const references = Array.isArray(scene_context?.references) ? scene_context.references : [];
+    const contextData = { ...inheritedContext, references };
     const formattedContext = formatContextForPrompt(contextData);
 
     // Filter only referenced entities (auto-detection)
@@ -535,6 +545,15 @@ Also provide:
         imageContexts.push({
           url: object.media_url,
           description: `Object reference: ${object.type} - ${object.description}`
+        });
+      }
+    }
+
+    for (const reference of references) {
+      if (reference?.url) {
+        imageContexts.push({
+          url: String(reference.url),
+          description: `User-attached visual reference: ${String(reference.name || 'reference image')}`
         });
       }
     }
@@ -614,7 +633,13 @@ Also provide:
     await updateJobStatus(job.id!, 'processing', 95);
 
     // Trigger video generation
-    await triggerVideoGeneration(project_id, frame.id, frameData);
+    await triggerVideoGeneration(
+      project_id,
+      frame.id,
+      frameData,
+      job.data.run_id,
+      String(job.id || '')
+    );
 
     const result = {
       frame_id: frame.id,
@@ -636,7 +661,15 @@ Also provide:
   }
 }
 
-async function triggerFrameGeneration(projectId: string, sceneId: string, sceneData: any, contextData: any, targetFrames: number) {
+async function triggerFrameGeneration(
+  projectId: string,
+  sceneId: string,
+  sceneData: any,
+  contextData: any,
+  targetFrames: number,
+  runId?: string,
+  parentJobId?: string
+) {
   const frameCount = targetFrames;
 
   for (let i = 0; i < frameCount; i++) {
@@ -654,7 +687,9 @@ async function triggerFrameGeneration(projectId: string, sceneId: string, sceneD
       },
       output_data: {},
       created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      updated_at: new Date().toISOString(),
+      ...(runId ? { run_id: runId, phase: 'frames' as const } : {}),
+      ...(parentJobId ? { parent_job_id: parentJobId } : {})
     };
 
     await addJob('frame-generation', frameJob);
@@ -662,7 +697,13 @@ async function triggerFrameGeneration(projectId: string, sceneId: string, sceneD
   }
 }
 
-async function triggerVideoGeneration(projectId: string, frameId: string, frameData: any) {
+async function triggerVideoGeneration(
+  projectId: string,
+  frameId: string,
+  frameData: any,
+  runId?: string,
+  parentJobId?: string
+) {
   const ENABLE_VIDEO_GENERATION = true; // Enable video generation
 
   if (!ENABLE_VIDEO_GENERATION) {
@@ -703,7 +744,9 @@ async function triggerVideoGeneration(projectId: string, frameId: string, frameD
     },
     output_data: {},
     created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    updated_at: new Date().toISOString(),
+    ...(runId ? { run_id: runId, phase: 'videos' as const } : {}),
+    ...(parentJobId ? { parent_job_id: parentJobId } : {})
   };
 
   await addJob('video-generation', videoJob);

@@ -99,6 +99,7 @@ export const StorageUploadSchema = z.object({
 export const JobStatusSchema = z.enum(['pending', 'processing', 'completed', 'failed']);
 
 export const JobTypeSchema = z.enum([
+  'agent-orchestration',
   'character-generation',
   'object-generation',
   'scene-generation',
@@ -121,7 +122,10 @@ export const JobSchema = z.object({
   output_data: z.record(z.string(), z.unknown()).optional(),
   error_message: z.string().optional(),
   created_at: z.string().datetime(),
-  updated_at: z.string().datetime()
+  updated_at: z.string().datetime(),
+  run_id: z.string().uuid().optional(),
+  phase: z.string().optional(),
+  parent_job_id: z.string().optional()
 });
 
 export const DirectorFunctionCallSchema = z.object({

@@ -1,6 +1,8 @@
 import { Project, Job, JobStatusResponse } from '../types/backend';
+import { handleMock, isMockEnabled, setMockEnabled } from '@/films/mockBackend';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const FORCE_MOCK = process.env.NEXT_PUBLIC_MOCK === '1';
 
 class ApiError extends Error {
   constructor(
@@ -13,14 +15,51 @@ class ApiError extends Error {
   }
 }
 
-async function fetchApi(endpoint: string, options: RequestInit = {}): Promise<any> {
+// Decide once per session whether to use the in-memory mock. We use the mock
+// when explicitly forced, or when a quick health probe to the backend fails.
+let modePromise: Promise<boolean> | null = null;
+async function ensureMode(): Promise<boolean> {
+  if (FORCE_MOCK) {
+    setMockEnabled(true);
+    return true;
+  }
+  if (modePromise) return modePromise;
+  modePromise = (async () => {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 1500);
+      const res = await fetch(`${API_BASE_URL}/health`, { signal: ctrl.signal });
+      clearTimeout(t);
+      const ok = res.ok;
+      setMockEnabled(!ok);
+      return !ok;
+    } catch {
+      setMockEnabled(true);
+      return true;
+    }
+  })();
+  return modePromise;
+}
+
+export async function fetchApi(endpoint: string, options: RequestInit = {}): Promise<any> {
+  const useMock = await ensureMode();
+  if (useMock) {
+    const method = (options.method || 'GET').toUpperCase();
+    const body = typeof FormData !== 'undefined' && options.body instanceof FormData
+      ? Object.fromEntries(options.body.entries())
+      : options.body ? JSON.parse(options.body as string) : undefined;
+    try {
+      return await handleMock(method, endpoint, body);
+    } catch (err: any) {
+      throw new ApiError(err?.message || 'Mock error', err?.status || 500);
+    }
+  }
+
   const url = `${API_BASE_URL}${endpoint}`;
+  const multipart = typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: multipart ? options.headers : { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
 
@@ -201,6 +240,18 @@ export const jobApi = {
     });
   },
 
+  async createVideoStitching(data: {
+    project_id: string;
+    video_urls: string[];
+    output_name?: string;
+    options?: any;
+  }): Promise<{ job_id: string }> {
+    return fetchApi('/api/jobs/video-stitching', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
   async getQueueStatus(): Promise<Array<{
     jobType: string;
     counts: {
@@ -236,6 +287,14 @@ export class EventSourceManager {
 
     // Close existing connection if any
     this.closeEventSource(key);
+
+    // In offline/mock mode there is no SSE endpoint; return a no-op stand-in so
+    // we don't spawn endlessly-reconnecting EventSource connections.
+    if (isMockEnabled()) {
+      const stub = { close() {} } as unknown as EventSource;
+      this.eventSources.set(key, stub);
+      return stub;
+    }
 
     const eventSource = new EventSource(`${API_BASE_URL}/api/events/project/${projectId}/${type}`);
     this.eventSources.set(key, eventSource);

@@ -1,0 +1,597 @@
+"use client";
+
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import {
+  ArrowUpRight,
+  ArrowRight,
+  ChevronDown,
+  Clapperboard,
+  SquarePen,
+  Layers2,
+  Link2,
+  MessagesSquare,
+  PanelLeftClose,
+  Pencil,
+  Play,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { useStudioStore } from "@/store/useStudioStore";
+import { useCustomGraphStore } from "@/store/useCustomGraphStore";
+import { updateCurrentProject } from "@/data/projectData";
+import { useStudioPipeline } from "@/components/studio/useStudioPipeline";
+import StudioCanvas, {
+  type StudioCanvasHandle,
+} from "@/components/studio/StudioCanvas";
+import LayersPanel from "@/components/studio/LayersPanel";
+import AssetPanel from "@/components/studio/AssetPanel";
+import StoryBrief from "@/components/studio/StoryBrief";
+import AnnotateModal from "@/components/studio/AnnotateModal";
+import AgentRail, {
+  type AgentRailComposerState,
+  type AgentRailHandle,
+} from "@/components/studio/AgentRail";
+import {
+  PromptBar,
+  type PromptBarHandle,
+} from "@/components/beautiful-ui/PromptBar";
+import {
+  resolveAssetSelection,
+  type AssetSelection,
+} from "@/components/studio/types";
+import { isDemoId } from "@/films";
+import { recordRecent } from "@/lib/recents";
+import FilmPlayer from "@/components/FilmPlayer";
+import WorkspaceBrand from "@/components/studio/WorkspaceBrand";
+import { buildContextOptions } from "@/components/studio/studioContext";
+import "./workspace.css";
+
+function StudioWorkspace() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const projectId = params.get("project") || "";
+  const isDemo = isDemoId(projectId);
+  const canvasRef = useRef<StudioCanvasHandle>(null);
+  const promptRef = useRef<PromptBarHandle>(null);
+  const agentRailRef = useRef<AgentRailHandle>(null);
+  const { graph, ready, initError, busy, mediaVersion, actions } =
+    useStudioPipeline(projectId, isDemo);
+  const isNewVideo =
+    !isDemo &&
+    graph.hasProject &&
+    !graph.characters.length &&
+    !graph.scenes.length &&
+    !graph.overview?.plot?.trim();
+  const boardEmpty = !graph.characters.length && !graph.scenes.length;
+  const player = useStudioStore((s) => s.player);
+  const openPlayer = useStudioStore((s) => s.openPlayer);
+  const closePlayer = useStudioStore((s) => s.closePlayer);
+  const selectedKeys = useStudioStore((s) => s.selectedKeys);
+  const briefOpen = selectedKeys.length === 1 && selectedKeys[0] === "overview";
+  const select = useStudioStore((s) => s.select);
+  const setSelection = useStudioStore((s) => s.setSelection);
+  const loadCustomGraph = useCustomGraphStore((s) => s.load);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [layersOpen, setLayersOpen] = useState(true);
+  const [promptHidden, setPromptHidden] = useState(false);
+  const reopenPromptRef = useRef<HTMLButtonElement>(null);
+  const revealPrompt = useCallback(() => {
+    setPromptHidden(false);
+    requestAnimationFrame(() => promptRef.current?.focus());
+  }, []);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [annotation, setAnnotation] = useState<AssetSelection | null>(null);
+  const [agentComposerState, setAgentComposerState] =
+    useState<AgentRailComposerState>({
+      disabled: false,
+      awaitingApproval: false,
+      editingSelection: false,
+    });
+
+  useEffect(() => {
+    if (projectId) loadCustomGraph(projectId);
+    select(null);
+  }, [projectId, loadCustomGraph, select]);
+  useEffect(() => {
+    const compact = window.matchMedia("(max-width: 900px)");
+    const update = () => {
+      if (compact.matches) setLayersOpen(false);
+    };
+    update();
+    compact.addEventListener("change", update);
+    return () => compact.removeEventListener("change", update);
+  }, []);
+  useEffect(() => {
+    if (briefOpen && window.innerWidth <= 900) setLayersOpen(false);
+  }, [briefOpen, selectedKeys]);
+  useEffect(() => {
+    if (!isDemo && projectId && graph.overview?.poster)
+      recordRecent({
+        id: projectId,
+        title: graph.overview.title,
+        poster: graph.overview.poster,
+      });
+  }, [projectId, isDemo, graph.overview?.poster, graph.overview?.title]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (
+        target.closest(
+          "input, textarea, select, [contenteditable=true], [data-film-player], [data-annotation-editor], [data-story-brief]",
+        )
+      )
+        return;
+      if (event.key === "Escape") {
+        closePlayer();
+        setAnnotation(null);
+        select(null);
+      }
+      if (event.key === "/" && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        revealPrompt();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closePlayer, select, revealPrompt]);
+
+  const title = graph.overview?.title || "Untitled film";
+  const selectedAssets = useMemo(
+    () =>
+      selectedKeys
+        .map((key) => resolveAssetSelection(graph, key))
+        .filter((asset): asset is AssetSelection => !!asset),
+    [graph, selectedKeys],
+  );
+  const contextOptions = useMemo(
+    () =>
+      buildContextOptions({
+        characters: graph.characters,
+        objects: graph.objects,
+        scenes: graph.scenes,
+      }),
+    [graph.characters, graph.objects, graph.scenes],
+  );
+
+  async function onSaveOverview(values: {
+    title: string;
+    summary: string;
+    plot: string;
+  }) {
+    setSaveError(null);
+    await updateCurrentProject(values);
+    if (!isDemo) recordRecent({ id: projectId, title: values.title });
+    await actions.refresh();
+  }
+  async function commitTitle(next: string) {
+    setEditingTitle(false);
+    if (!next.trim() || next.trim() === title) return;
+    try {
+      await updateCurrentProject({ title: next.trim() });
+      if (!isDemo) recordRecent({ id: projectId, title: next.trim() });
+      await actions.refresh();
+    } catch {
+      setSaveError("The title could not be saved. Please try again.");
+    }
+  }
+  async function onEditSelection(prompt: string, keys: string[]) {
+    const editable = keys
+      .map((key) => resolveAssetSelection(graph, key))
+      .filter(
+        (asset): asset is AssetSelection => !!asset?.editable && !!asset.media,
+      );
+    await Promise.all(
+      editable.map((asset) =>
+        actions.editAsset(
+          { key: asset.key, refId: asset.id, media: asset.media },
+          prompt,
+        ),
+      ),
+    );
+    return editable.length;
+  }
+  const draft = useCallback(
+    (text: string, wholeFilm = false) => {
+      if (wholeFilm) select(null);
+      revealPrompt();
+      promptRef.current?.setDraft(
+        text,
+        wholeFilm ? `${projectId}:film` : undefined,
+      );
+    },
+    [projectId, select, revealPrompt],
+  );
+  const draftForFilm = useCallback(
+    (text: string) => draft(text, true),
+    [draft],
+  );
+
+  if (!projectId)
+    return (
+      <div className="studio-missing">
+        <Clapperboard size={32} />
+        <h1>Choose a film to begin.</h1>
+        <button onClick={() => router.push("/")}>
+          Open your library <ArrowRight size={16} />
+        </button>
+      </div>
+    );
+
+  return (
+    <MotionConfig reducedMotion="user">
+      <div className="studio-workspace">
+        <header
+          className="studio-header"
+          inert={briefOpen ? true : undefined}
+          aria-hidden={briefOpen || undefined}
+        >
+          <WorkspaceBrand onClick={() => router.push("/")} />
+          <span className="studio-header-divider" />
+          {editingTitle ? (
+            <input
+              className="studio-title-input"
+              autoFocus
+              defaultValue={title}
+              aria-label="Film title"
+              onBlur={(e) => void commitTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === "Escape") setEditingTitle(false);
+              }}
+            />
+          ) : (
+            <button
+              className="studio-project-title"
+              onClick={() => setEditingTitle(true)}
+              title="Rename film"
+            >
+              {title}
+              <Pencil size={12} />
+            </button>
+          )}
+          <span className="studio-project-state">
+            {isDemo ? "Sample film" : "Workspace"}
+          </span>
+          <div className="studio-header-actions">
+            <button
+              className="studio-icon-button studio-history-toggle"
+              aria-label="Conversations"
+              title="Conversations"
+              onClick={() =>
+                agentRailRef.current?.openConversations({ history: true })
+              }
+            >
+              <MessagesSquare size={17} />
+            </button>
+            <button
+              className="studio-preview-button"
+              aria-label={
+                graph.overview?.finalVideoUrl ? "Preview film" : "Assemble film"
+              }
+              disabled={!ready}
+              onClick={() =>
+                graph.overview?.finalVideoUrl
+                  ? openPlayer(graph.overview.finalVideoUrl, title)
+                  : draft("Assemble the approved shots into a film.", true)
+              }
+            >
+              <Play size={13} fill="currentColor" />
+              <span>
+                {graph.overview?.finalVideoUrl
+                  ? "Preview film"
+                  : "Assemble film"}
+              </span>
+            </button>
+          </div>
+        </header>
+        {(initError || saveError) && (
+          <div className="studio-notice" role="alert">
+            {saveError || initError}
+            <button
+              aria-label="Retry loading project"
+              onClick={() => void actions.refresh()}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+        <div
+          className="studio-body"
+          inert={briefOpen ? true : undefined}
+          aria-hidden={briefOpen || undefined}
+        >
+          {layersOpen && (
+            <aside className="studio-outline">
+              <div className="studio-outline-top">
+                <span>Your film</span>
+                <button
+                  className="studio-icon-button"
+                  onClick={() => setLayersOpen(false)}
+                  aria-label="Hide assets"
+                >
+                  <PanelLeftClose size={16} />
+                </button>
+              </div>
+              <LayersPanel
+                graph={graph}
+                onCollapse={() => setLayersOpen(false)}
+              />
+            </aside>
+          )}
+          <main className="studio-main">
+            <div className="studio-work-surface">
+              {!layersOpen && (
+                <button
+                  className="studio-show-assets"
+                  onClick={() => {
+                    if (window.innerWidth <= 900)
+                      agentRailRef.current?.closeConversations();
+                    setLayersOpen(true);
+                  }}
+                  aria-label="Show assets"
+                  title="Show assets"
+                >
+                  <Layers2 size={16} />
+                </button>
+              )}
+              <div className="studio-canvas-surface">
+                <StudioCanvas
+                  ref={canvasRef}
+                  graph={graph}
+                  mediaVersion={mediaVersion}
+                  busy={busy}
+                  onPlayFilm={openPlayer}
+                  onDraft={draftForFilm}
+                />
+              </div>
+            </div>
+            {ready && boardEmpty && !briefOpen && (
+              <div className="studio-empty">
+                <span className="studio-empty-eyebrow">
+                  <Sparkles size={14} /> EVERY FILM STARTS SOMEWHERE
+                </span>
+                <h1>
+                  A world waiting
+                  <br />
+                  for your first idea.
+                </h1>
+                <p>
+                  Start with a character, a scene, or a feeling.
+                  <br />
+                  We’ll help you find the story that comes next.
+                </p>
+                <button onClick={revealPrompt}>
+                  Let’s make a film <ArrowUpRight size={16} />
+                </button>
+              </div>
+            )}
+            {!ready && (
+              <div className="studio-loading" role="status">
+                <span className="cv-spin" />
+                Opening your studio…
+              </div>
+            )}
+            {promptHidden && (
+              <button
+                ref={reopenPromptRef}
+                className="studio-reopen-prompt"
+                onClick={revealPrompt}
+                aria-label="Show prompt bar"
+                aria-expanded={false}
+                aria-controls="studio-prompt-dock"
+                title="Show prompt bar · /"
+              >
+                <SquarePen size={14} />
+                <span>Prompt</span>
+                <kbd>/</kbd>
+              </button>
+            )}
+            <div
+              id="studio-prompt-dock"
+              className="project-prompt-dock agent-ui"
+              hidden={promptHidden}
+              aria-label="Creative conversation composer"
+            >
+              <div className="studio-composer-heading">
+                <span>
+                  <Sparkles size={14} />
+                  {briefOpen
+                    ? "Develop your story"
+                    : selectedAssets.length
+                      ? `Refine ${selectedAssets.length === 1 ? selectedAssets[0].label : `${selectedAssets.length} assets`}`
+                      : "Your creative partner"}
+                </span>
+                <div className="studio-composer-actions">
+                  {selectedAssets.length > 0 ? (
+                    <button onClick={() => select(null)}>
+                      Clear selection <X size={12} />
+                    </button>
+                  ) : (
+                    <span className="studio-composer-hint">
+                      An idea. An edit. What happens next.
+                    </span>
+                  )}
+                  <button
+                    className="studio-hide-prompt"
+                    aria-label="Hide prompt bar"
+                    aria-expanded={true}
+                    aria-controls="studio-prompt-dock"
+                    title="Hide prompt bar"
+                    onClick={() => {
+                      setPromptHidden(true);
+                      requestAnimationFrame(() =>
+                        reopenPromptRef.current?.focus(),
+                      );
+                    }}
+                  >
+                    <ChevronDown size={15} />
+                  </button>
+                </div>
+              </div>
+              <PromptBar
+                draftKey={`${projectId}:${selectedKeys.length ? [...selectedKeys].sort().join("|") : "film"}`}
+                ref={promptRef}
+                disabled={agentComposerState.disabled || !ready}
+                placeholder={
+                  agentComposerState.awaitingApproval
+                    ? "Review the proposal in the conversation…"
+                    : selectedAssets.length
+                      ? "Describe what you’d like to change…"
+                      : isNewVideo
+                        ? "A film about…"
+                        : "Where should the story go next?"
+                }
+                suggestions={
+                  isNewVideo
+                    ? [
+                        "A one-location thriller",
+                        "A surreal sci-fi memory",
+                        "A quiet character drama",
+                      ]
+                    : []
+                }
+                contexts={selectedAssets.map((asset) => ({
+                  id: asset.key,
+                  label: asset.label,
+                  media: asset.media,
+                  onClear: () => select(asset.key, { additive: true }),
+                }))}
+                contextOptions={contextOptions}
+                allowExtras={!selectedAssets.length}
+                onUploadAttachment={(file) =>
+                  agentRailRef.current!.uploadAttachment(file)
+                }
+                onSend={(text, attachments) =>
+                  agentRailRef.current?.submitPrompt(text, attachments)
+                }
+              />
+              <div className="studio-composer-footer">
+                <span>
+                  <Link2 size={11} />
+                  {selectedAssets.length
+                    ? "Selected assets guide this revision"
+                    : "Select cards to refine them together"}
+                </span>
+                {agentComposerState.awaitingApproval ? (
+                  <button
+                    onClick={() =>
+                      agentRailRef.current?.openConversations({ current: true })
+                    }
+                  >
+                    Review proposal <ArrowRight size={12} />
+                  </button>
+                ) : (
+                  <span>
+                    <kbd>↵</kbd> Send{" "}
+                    <span className="studio-key-separator">·</span>
+                    <kbd>⇧ ↵</kbd> New line
+                  </span>
+                )}
+              </div>
+            </div>
+          </main>
+          <AgentRail
+            ref={agentRailRef}
+            projectId={projectId}
+            graph={graph}
+            isNewVideo={isNewVideo}
+            selectedLabel={selectedAssets[0]?.label}
+            selectedAssets={selectedAssets}
+            externalComposer
+            onEditSelection={onEditSelection}
+            onSelectAssets={setSelection}
+            onComposerStateChange={setAgentComposerState}
+            onRefresh={actions.refresh}
+            onPlay={(url) => openPlayer(url, title)}
+            selectionContent={
+              <AssetPanel
+                key={selectedKeys.join("|")}
+                graph={graph}
+                version={mediaVersion}
+                busy={busy}
+                onRefine={(text) =>
+                  window.innerWidth <= 900
+                    ? agentRailRef.current?.draftSelection(text)
+                    : draft(text)
+                }
+                onAnnotate={setAnnotation}
+              />
+            }
+          />
+        </div>
+        {graph.overview && (
+          <StoryBrief
+            key={projectId}
+            overview={graph.overview}
+            visible={briefOpen}
+            onSave={onSaveOverview}
+            onClose={() => select(null)}
+          />
+        )}
+        <AnimatePresence>
+          {annotation?.media && (
+            <AnnotateModal
+              key={annotation.key}
+              title={annotation.label}
+              src={annotation.media}
+              busy={!!busy[annotation.key]}
+              onClose={() => setAnnotation(null)}
+              onApply={async (prompt, composite) => {
+                await actions.editAsset(
+                  {
+                    key: annotation.key,
+                    refId: annotation.id,
+                    media: annotation.media,
+                  },
+                  prompt,
+                  composite,
+                );
+                setAnnotation(null);
+              }}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {player && (
+            <motion.div
+              className="studio-player"
+              role="dialog"
+              aria-modal="true"
+              aria-label={player.title}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+            >
+              <FilmPlayer
+                src={player.src}
+                title={player.title}
+                onClose={closePlayer}
+                autoplay
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </MotionConfig>
+  );
+}
+
+export default function StudioPage() {
+  return (
+    <Suspense
+      fallback={<div className="studio-loading">Opening your studio…</div>}
+    >
+      <StudioWorkspace />
+    </Suspense>
+  );
+}

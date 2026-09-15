@@ -2,16 +2,19 @@ import { createImageWorkers } from './imageWorker.js';
 import { createVideoWorker } from './videoWorker.js';
 import { createStitchingWorker } from './stitchingWorker.js';
 import { createLLMWorker } from './llmWorker.js';
+import { createAgentWorker, handleAgentWorkerFailure } from './agentWorker.js';
 
 export function initAllWorkers() {
   console.log('🏭 Initializing all workers...');
 
+  const agentWorker = createAgentWorker();
   const { characterGenerationWorker, objectGenerationWorker, imageEditingWorker, frameGenerationWorker, sceneGenerationWorker } = createImageWorkers();
   const videoWorker = createVideoWorker();
   const stitchingWorker = createStitchingWorker();
-  const { llmWorker, sceneWorker, frameWorker } = createLLMWorker();
+  const { llmWorker, sceneWorker } = createLLMWorker();
 
   const workers = {
+    agentWorker,
     characterGenerationWorker,
     objectGenerationWorker,
     imageEditingWorker,
@@ -20,11 +23,13 @@ export function initAllWorkers() {
     videoWorker,
     stitchingWorker,
     llmWorker,
-    sceneWorker,
-    frameWorker
+    sceneWorker
   };
 
   setupWorkerErrorHandlers(workers);
+  agentWorker.on('failed', (job, error) => {
+    void handleAgentWorkerFailure(job, error);
+  });
 
   console.log('✅ All workers initialized successfully');
   return workers;

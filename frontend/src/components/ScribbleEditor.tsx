@@ -1,269 +1,456 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Eraser, Highlighter as HighlighterIcon, Palette, Pencil, Ruler, Trash2 } from "lucide-react";
+import {
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  type PointerEvent,
+} from "react";
+import {
+  Eraser,
+  Highlighter,
+  LoaderCircle,
+  Pencil,
+  Redo2,
+  RotateCcw,
+  Trash2,
+  Undo2,
+} from "lucide-react";
+import type Konva from "konva";
 import { Stage, Layer, Image as KImage, Line } from "react-konva";
-import { colors } from "@/styles/colors";
+import styles from "./ScribbleEditor.module.css";
 
-export type ScribbleLine = { points: number[]; color: string; size: number; erase?: boolean; tool?: "pencil" | "highlighter" | "eraser" };
+export type ScribbleLine = {
+  points: number[];
+  color: string;
+  size: number;
+  erase?: boolean;
+  tool?: "pencil" | "highlighter" | "eraser";
+};
+export type ScribbleExport = { toDataURL: () => string | null };
+type Drawing = {
+  lines: ScribbleLine[];
+  past: ScribbleLine[][];
+  future: ScribbleLine[][];
+};
+type Action =
+  | { type: "start"; line: ScribbleLine }
+  | { type: "extend"; point: number[] }
+  | { type: "undo" | "redo" | "clear" };
+function drawingReducer(state: Drawing, action: Action): Drawing {
+  if (action.type === "start")
+    return {
+      lines: [...state.lines, action.line],
+      past: [...state.past, state.lines],
+      future: [],
+    };
+  if (action.type === "extend") {
+    const last = state.lines[state.lines.length - 1];
+    return last
+      ? {
+          ...state,
+          lines: [
+            ...state.lines.slice(0, -1),
+            { ...last, points: [...last.points, ...action.point] },
+          ],
+        }
+      : state;
+  }
+  if (action.type === "undo" && state.past.length)
+    return {
+      lines: state.past[state.past.length - 1],
+      past: state.past.slice(0, -1),
+      future: [state.lines, ...state.future],
+    };
+  if (action.type === "redo" && state.future.length)
+    return {
+      lines: state.future[0],
+      past: [...state.past, state.lines],
+      future: state.future.slice(1),
+    };
+  if (action.type === "clear" && state.lines.length)
+    return { lines: [], past: [...state.past, state.lines], future: [] };
+  return state;
+}
 
-export default function ScribbleEditor({
-  src,
-  width,
-  brushSize = 12,
-  brushColor = "#8DFF00",
-  lines,
-  onChangeLines,
-}: {
+type Props = {
   src: string;
-  width?: number; // if undefined, fills parent width
+  width?: number;
   brushSize?: number;
   brushColor?: string;
   lines?: ScribbleLine[];
-  onChangeLines?: (l: ScribbleLine[]) => void;
-}) {
-  const stageRef = useRef<any>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [img, setImg] = useState<HTMLImageElement | null>(null);
-  const [height, setHeight] = useState(0);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [internalLines, setInternalLines] = useState<ScribbleLine[]>([]);
-  const [editing] = useState(true);
-  const [tool, setTool] = useState<"pencil" | "highlighter" | "eraser">("pencil");
+  onChangeLines?: (lines: ScribbleLine[]) => void;
+  exportRef?: { current: ScribbleExport | null };
+  disabled?: boolean;
+};
+
+export default function ScribbleEditor(props: Props) {
+  return <DrawingEditor key={props.src} {...props} />;
+}
+
+function DrawingEditor({
+  src,
+  width,
+  brushSize = 3,
+  brushColor = "#c4a9ff",
+  lines = [],
+  onChangeLines,
+  exportRef,
+  disabled = false,
+}: Props) {
+  const stageRef = useRef<Konva.Stage>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const pointer = useRef<number | null>(null);
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [bounds, setBounds] = useState({ width: width || 640, height: 400 });
+  const [drawing, dispatch] = useReducer(drawingReducer, {
+    lines,
+    past: [],
+    future: [],
+  });
+  const [tool, setTool] = useState<"pencil" | "highlighter" | "eraser">(
+    "pencil",
+  );
   const [color, setColor] = useState(brushColor);
   const [size, setSize] = useState(brushSize);
+  const locked = disabled || !image;
+  const changeRef = useRef(onChangeLines);
+  changeRef.current = onChangeLines;
 
-  // load image
   useEffect(() => {
-    const i = new window.Image();
-    i.crossOrigin = "anonymous";
-    i.src = src;
-    i.onload = () => {
-      // height is computed from container (1:1)
-      setImg(i);
+    changeRef.current?.(drawing.lines);
+  }, [drawing.lines]);
+  useEffect(() => {
+    const next = new window.Image();
+    next.crossOrigin = "anonymous";
+    let cancelled = false;
+    setLoadError(false);
+    setImage(null);
+    next.onload = () => {
+      if (!cancelled) setImage(next);
     };
-  }, [src]);
-
-  // Track container width if width is not provided
-  const [containerWidth, setContainerWidth] = useState<number>(width ?? 480);
+    next.onerror = () => {
+      if (!cancelled) setLoadError(true);
+    };
+    next.src = src;
+    return () => {
+      cancelled = true;
+      next.onload = null;
+      next.onerror = null;
+    };
+  }, [src, loadAttempt]);
   useEffect(() => {
-    if (typeof width === "number") {
-      setContainerWidth(width);
-      setHeight(width); // 1:1
-      return;
-    }
-    const el = containerRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const w = Math.max(180, Math.floor(entry.contentRect.width));
-        setContainerWidth(w);
-        setHeight(w); // 1:1 square
-      }
+    const element = viewportRef.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setBounds({
+        width: Math.max(
+          1,
+          Math.min(width || Infinity, entry.contentRect.width),
+        ),
+        height: Math.max(1, entry.contentRect.height),
+      });
     });
-    ro.observe(el);
-    return () => ro.disconnect();
+    observer.observe(element);
+    return () => observer.disconnect();
   }, [width]);
 
-  // Initialize/refresh lines when source image changes
+  const imageWidth = image?.naturalWidth || 1;
+  const imageHeight = image?.naturalHeight || 1;
+  const scale = Math.min(
+    bounds.width / imageWidth,
+    bounds.height / imageHeight,
+    1,
+  );
+  const displayWidth = Math.max(1, imageWidth * scale);
+  const displayHeight = Math.max(1, imageHeight * scale);
+
   useEffect(() => {
-    setInternalLines(lines ?? []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src]);
+    if (!exportRef) return;
+    exportRef.current = {
+      toDataURL: () => {
+        if (!stageRef.current || !image) return null;
+        try {
+          // Preserve the full image and its proportions, independent of preview size.
+          const exportScale = Math.min(
+            1,
+            2048 / Math.max(imageWidth, imageHeight),
+          );
+          return stageRef.current.toDataURL({
+            pixelRatio: exportScale / scale,
+            mimeType: "image/png",
+          });
+        } catch {
+          return null;
+        }
+      },
+    };
+    return () => {
+      exportRef.current = null;
+    };
+  }, [exportRef, image, imageWidth, imageHeight, scale]);
 
-  function updateLines(updater: (prev: ScribbleLine[]) => ScribbleLine[]) {
-    setInternalLines((prev) => updater(prev));
-  }
-
-  // Notify parent after render when lines change to avoid parent updates during child render
-  const lastSentRef = useRef<ScribbleLine[] | null>(null);
-  useEffect(() => {
-    if (!onChangeLines) return;
-    if (internalLines === lines) return;
-    if (lastSentRef.current === internalLines) return;
-    lastSentRef.current = internalLines;
-    onChangeLines(internalLines);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [internalLines, lines, onChangeLines]);
-
-  const handlePointerDown = (e: any) => {
-    if (!editing) return;
-    const stage = e.target.getStage();
-    const pos = stage.getPointerPosition();
-    if (!pos) return;
-    setIsDrawing(true);
-    updateLines((prev) =>
-      prev.concat([
-        {
-          points: [pos.x, pos.y],
-          color,
-          size,
-          erase: tool === "eraser",
-          tool: tool === "eraser" ? "eraser" : tool,
-        },
-      ])
-    );
+  const imagePoint = (event: PointerEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    return [
+      Math.max(0, Math.min(imageWidth, (event.clientX - rect.left) / scale)),
+      Math.max(0, Math.min(imageHeight, (event.clientY - rect.top) / scale)),
+    ];
   };
-
-  const handlePointerMove = (e: any) => {
-    if (!isDrawing || !editing) return;
-    const stage = e.target.getStage();
-    const point = stage.getPointerPosition();
-    updateLines((prev) => {
-      const last = prev[prev.length - 1];
-      if (!last) return prev;
-      last.points = last.points.concat([point.x, point.y]);
-      return prev.slice(0, -1).concat(last);
+  const start = (event: PointerEvent<HTMLDivElement>) => {
+    if (
+      locked ||
+      pointer.current !== null ||
+      event.button !== 0 ||
+      (tool === "eraser" && !drawing.lines.length)
+    )
+      return;
+    event.preventDefault();
+    event.currentTarget.focus({ preventScroll: true });
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    pointer.current = event.pointerId;
+    const point = imagePoint(event);
+    dispatch({
+      type: "start",
+      line: {
+        points: [...point, ...point],
+        color,
+        size:
+          (tool === "highlighter"
+            ? size * 4
+            : tool === "eraser"
+              ? size * 5
+              : size) / scale,
+        erase: tool === "eraser",
+        tool,
+      },
     });
   };
-
-  const handlePointerUp = () => setIsDrawing(false);
-
-  // no text features
-
-  const exportPNG = () => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    const dataURL = stage.toDataURL({ pixelRatio: 2, mimeType: "image/png" });
-    const a = document.createElement("a");
-    a.href = dataURL;
-    a.download = "scribble.png";
-    a.click();
+  const move = (event: PointerEvent<HTMLDivElement>) => {
+    if (pointer.current !== event.pointerId || locked) return;
+    dispatch({ type: "extend", point: imagePoint(event) });
+  };
+  const finish = (event: PointerEvent<HTMLDivElement>) => {
+    if (pointer.current !== event.pointerId) return;
+    pointer.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const historyAction = (type: "undo" | "redo" | "clear") => {
+    if (!disabled) {
+      pointer.current = null;
+      dispatch({ type });
+    }
   };
 
-  const containerHeight = useMemo(() => Math.max(180, height), [height]);
-
-  // compute cover-fit dims for image within square stage
-  const coverDims = useMemo(() => {
-    if (!img) return { x: 0, y: 0, w: containerWidth, h: containerHeight };
-    const sx = containerWidth / img.naturalWidth;
-    const sy = containerHeight / img.naturalHeight;
-    const scale = Math.max(sx, sy);
-    const w = img.naturalWidth * scale;
-    const h = img.naturalHeight * scale;
-    const x = (containerWidth - w) / 2;
-    const y = (containerHeight - h) / 2;
-    return { x, y, w, h };
-  }, [img, containerWidth, containerHeight]);
-
   return (
-    <div ref={containerRef} className="flex w-full flex-col gap-3">
-      <div className="overflow-hidden rounded-[18px] border border-white/10 bg-white">
-        <Stage
-          ref={stageRef}
-          width={containerWidth}
-          height={containerHeight}
-          onMouseDown={handlePointerDown}
-          onMouseMove={handlePointerMove}
-          onMouseUp={handlePointerUp}
-          onTouchStart={handlePointerDown}
-          onTouchMove={handlePointerMove}
-          onTouchEnd={handlePointerUp}
-          style={{ display: "block", background: "transparent" }}
-        >
-          <Layer listening={false}>
-            {img && (
-              <KImage image={img} x={coverDims.x} y={coverDims.y} width={coverDims.w} height={coverDims.h} />
-            )}
-          </Layer>
-
-          <Layer listening={editing}>
-            {internalLines.map((l, i) => {
-              const isEraser = l.erase || l.tool === "eraser";
-              const isHighlighter = l.tool === "highlighter";
-              return (
-                <Line
-                  key={i}
-                  points={l.points}
-                  stroke={l.color}
-                  strokeWidth={l.size}
-                  opacity={isEraser ? 1 : isHighlighter ? 0.5 : 1}
-                  tension={0}
-                  lineCap="round"
-                  lineJoin="round"
-                  globalCompositeOperation={isEraser ? "destination-out" : "source-over"}
-                />
-              );
-            })}
-          </Layer>
-
-          {/* No text layer */}
-        </Stage>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-
-        <button
-          onClick={() => updateLines(() => [])}
-          title="Clear"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-white/12 bg-white/5 text-white/80 hover:border-white/22"
-        >
-          <Trash2 className="h-5 w-5" />
-        </button>
-
-        <label className="inline-flex h-10 items-center justify-center gap-2 rounded-[12px] border border-white/12 bg-white/5 px-2 text-white/80">
-          <Palette className="h-5 w-5" />
+    <div
+      className={styles.editor}
+      onKeyDown={(event) => {
+        if (
+          disabled ||
+          (event.target as HTMLElement).closest("input, textarea, select")
+        )
+          return;
+        if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "z"
+        ) {
+          event.preventDefault();
+          historyAction(event.shiftKey ? "redo" : "undo");
+        } else if (
+          (event.metaKey || event.ctrlKey) &&
+          event.key.toLowerCase() === "y"
+        ) {
+          event.preventDefault();
+          historyAction("redo");
+        } else if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+          const tools = { p: "pencil", h: "highlighter", e: "eraser" } as const;
+          const next = tools[event.key.toLowerCase() as keyof typeof tools];
+          if (next) {
+            event.preventDefault();
+            setTool(next);
+          }
+        }
+      }}
+    >
+      <div className={styles.toolbar} role="toolbar" aria-label="Drawing tools">
+        <div className={styles.tools}>
+          {(
+            [
+              { id: "pencil", label: "Pen", key: "P", icon: Pencil },
+              {
+                id: "highlighter",
+                label: "Highlighter",
+                key: "H",
+                icon: Highlighter,
+              },
+              { id: "eraser", label: "Eraser", key: "E", icon: Eraser },
+            ] as const
+          ).map(({ id, label, key, icon: Icon }) => (
+            <button
+              key={id}
+              aria-label={label}
+              title={`${label} · ${key}`}
+              aria-pressed={tool === id}
+              disabled={locked}
+              onClick={() => setTool(id)}
+            >
+              <Icon size={15} />
+            </button>
+          ))}
+        </div>
+        <div className={styles.colors} role="group" aria-label="Drawing color">
+          {[
+            { value: "#c4a9ff", name: "Lavender" },
+            { value: "#ffb68c", name: "Peach" },
+            { value: "#f1f0f5", name: "White" },
+          ].map((swatch) => (
+            <button
+              key={swatch.value}
+              className={styles.swatch}
+              style={{ background: swatch.value }}
+              aria-label={swatch.name}
+              aria-pressed={color === swatch.value}
+              title={swatch.name}
+              disabled={locked || tool === "eraser"}
+              onClick={() => setColor(swatch.value)}
+            />
+          ))}
           <input
+            aria-label="Custom drawing color"
+            title="Custom color"
             type="color"
             value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="h-6 w-6 cursor-pointer rounded-md border border-white/20 bg-transparent p-0"
+            disabled={locked || tool === "eraser"}
+            onChange={(event) => setColor(event.target.value)}
           />
-        </label>
-
-        <label className="inline-flex h-10 items-center gap-2 rounded-[12px] border border-white/12 bg-white/5 px-2 text-white/80">
-          <Ruler className="h-5 w-5" />
+        </div>
+        <label className={styles.brush}>
+          <span>Size</span>
           <input
             type="range"
-            min={2}
-            max={30}
+            aria-label="Stroke width"
+            min={1}
+            max={12}
+            step={1}
             value={size}
-            onChange={(e) => setSize(parseInt(e.target.value, 10))}
-            className="accent-[#8de21d]"
+            disabled={locked}
+            onChange={(event) => setSize(Number(event.target.value))}
           />
+          <span>{size}</span>
         </label>
-
-        <button
-          onClick={() => setTool("pencil")}
-          title="Pencil"
-          className={[
-            "inline-flex h-10 w-10 items-center justify-center rounded-[12px] border",
-            tool === "pencil" ? "border-[#2aa3ff] bg-[#0e1b1d] text-[#69c0ff]" : "border-white/12 bg-white/5 text-white/80 hover:border-white/22",
-          ].join(" ")}
-        >
-          <Pencil className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => setTool("highlighter")}
-          title="Highlighter"
-          className={[
-            "inline-flex h-10 w-10 items-center justify-center rounded-[12px] border",
-            tool === "highlighter" ? "border-[#2aa3ff] bg-[#0e1b1d] text-[#69c0ff]" : "border-white/12 bg-white/5 text-white/80 hover:border-white/22",
-          ].join(" ")}
-        >
-          <HighlighterIcon className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => setTool("eraser")}
-          title="Eraser"
-          className={[
-            "inline-flex h-10 w-10 items-center justify-center rounded-[12px] border",
-            tool === "eraser" ? "border-[#2aa3ff] bg-[#0e1b1d] text-[#69c0ff]" : "border-white/12 bg-white/5 text-white/80 hover:border-white/22",
-          ].join(" ")}
-        >
-          <Eraser className="h-5 w-5" />
-        </button>
-
-        <button
-          onClick={exportPNG}
-          title="Export PNG"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-[12px] border border-white/12 bg-white/5 text-white/80 hover:border-white/22"
-        >
-          <Download className="h-5 w-5" />
-        </button>
+        <div className={styles.history}>
+          <button
+            aria-label="Undo drawing"
+            title="Undo · ⌘Z"
+            disabled={disabled || !drawing.past.length}
+            onClick={() => historyAction("undo")}
+          >
+            <Undo2 size={15} />
+          </button>
+          <button
+            aria-label="Redo drawing"
+            title="Redo · ⇧⌘Z"
+            disabled={disabled || !drawing.future.length}
+            onClick={() => historyAction("redo")}
+          >
+            <Redo2 size={15} />
+          </button>
+          <span />
+          <button
+            aria-label="Clear drawing"
+            title="Clear drawing"
+            disabled={disabled || !drawing.lines.length}
+            onClick={() => historyAction("clear")}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      </div>
+      <div className={styles.workArea}>
+        <div className={styles.viewport} ref={viewportRef}>
+          {image ? (
+            <div
+              className={styles.surface}
+              style={{
+                width: displayWidth,
+                height: displayHeight,
+                cursor: disabled ? "wait" : "crosshair",
+              }}
+              role="img"
+              aria-label="Image to annotate"
+              tabIndex={0}
+              onPointerDown={start}
+              onPointerMove={move}
+              onPointerUp={finish}
+              onPointerCancel={finish}
+              onLostPointerCapture={() => {
+                pointer.current = null;
+              }}
+            >
+              <Stage
+                ref={stageRef}
+                width={displayWidth}
+                height={displayHeight}
+                scaleX={scale}
+                scaleY={scale}
+                listening={false}
+              >
+                <Layer listening={false}>
+                  <KImage
+                    image={image}
+                    x={0}
+                    y={0}
+                    width={imageWidth}
+                    height={imageHeight}
+                  />
+                </Layer>
+                <Layer listening={false}>
+                  {drawing.lines.map((line, i) => (
+                    <Line
+                      key={i}
+                      points={line.points}
+                      stroke={line.color}
+                      strokeWidth={line.size}
+                      opacity={line.tool === "highlighter" ? 0.45 : 1}
+                      lineCap="round"
+                      lineJoin="round"
+                      globalCompositeOperation={
+                        line.erase || line.tool === "eraser"
+                          ? "destination-out"
+                          : "source-over"
+                      }
+                    />
+                  ))}
+                </Layer>
+              </Stage>
+            </div>
+          ) : (
+            <div className={styles.state} role={loadError ? "alert" : "status"}>
+              {loadError ? (
+                <>
+                  <span>We couldn’t load this image.</span>
+                  <button
+                    onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+                  >
+                    <RotateCcw size={13} />
+                    Try again
+                  </button>
+                </>
+              ) : (
+                <>
+                  <LoaderCircle size={18} />
+                  <span>Loading image…</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
-

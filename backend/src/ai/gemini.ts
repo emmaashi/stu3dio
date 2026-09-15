@@ -226,6 +226,26 @@ export async function generateText(prompt: string, systemPrompt?: string): Promi
   return text;
 }
 
+export async function* generateTextStream(
+  prompt: string,
+  systemPrompt?: string
+): AsyncGenerator<string, string> {
+  const model = gemini.getGenerativeModel({ model: TEXT_MODEL });
+  const fullPrompt = systemPrompt ? `${systemPrompt}\n\nUser: ${prompt}` : prompt;
+  const result = await model.generateContentStream(fullPrompt);
+  let complete = '';
+
+  for await (const chunk of result.stream) {
+    const text = chunk.text();
+    if (!text) continue;
+    complete += text;
+    yield text;
+  }
+
+  if (!complete.trim()) throw new Error('No text generated');
+  return complete;
+}
+
 export async function generateScript(plot: string, characters: string[]): Promise<string> {
   const prompt = `Plot: ${plot}\nCharacters: ${characters.join(', ')}\n\nGenerate a complete script with scene descriptions, character dialogue, camera directions, and time constraints (max 8 seconds per scene).`;
   return generateText(prompt, PROMPTS.SCRIPT_SYSTEM);
@@ -468,4 +488,3 @@ export async function parseReferencedIds(text: string): Promise<{
 
   return { characterIds, objectIds };
 }
-

@@ -10,7 +10,10 @@ type BackendState = {
 };
 
 export const useBackendStore = create<BackendState>((set) => ({
-  apiBaseUrl: process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:3000",
+  apiBaseUrl:
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:5000",
   projectId: null,
   conversationId: null,
   setApiBaseUrl: (url) => set({ apiBaseUrl: url }),
