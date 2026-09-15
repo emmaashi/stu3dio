@@ -813,24 +813,6 @@
     padding: 12px;
   }
 }
-.studio-missing {
-  height: 100dvh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 20px;
-  background: #171719;
-  color: #cbb9df;
-}
-.studio-missing button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border: 1px solid #ffffff20;
-  border-radius: 6px;
-}
 @keyframes studio-fade-in {
   from {
     opacity: 0;

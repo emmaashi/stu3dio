@@ -14,7 +14,6 @@ import {
   ArrowUpRight,
   ArrowRight,
   ChevronDown,
-  Clapperboard,
   SquarePen,
   Layers2,
   Link2,
@@ -101,6 +100,11 @@ function StudioWorkspace() {
     if (projectId) loadCustomGraph(projectId);
     select(null);
   }, [projectId, loadCustomGraph, select]);
+  // /studio is meaningless without a film, so fall back to the library instead
+  // of rendering a screen whose only action is to go there.
+  useEffect(() => {
+    if (!projectId) router.replace("/");
+  }, [projectId, router]);
   useEffect(() => {
     const compact = window.matchMedia("(max-width: 900px)");
     const update = () => {
@@ -215,16 +219,7 @@ function StudioWorkspace() {
     [draft],
   );
 
-  if (!projectId)
-    return (
-      <div className="studio-missing">
-        <Clapperboard size={32} />
-        <h1>Choose a film to begin.</h1>
-        <button onClick={() => router.push("/")}>
-          Open your library <ArrowRight size={16} />
-        </button>
-      </div>
-    );
+  if (!projectId) return null;
 
   return (
     <MotionConfig reducedMotion="user">
