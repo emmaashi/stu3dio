@@ -8,7 +8,7 @@ A high-performance backend for AI-powered film production featuring hierarchical
 - 🤖 **AI-Powered Creation**: Gemini 2.5 Flash for images/text, fal.ai for videos
 - 🏭 **Background Job Processing**: BullMQ + Redis for scalable task management
 - 📡 **Director Agent**: Real-time streaming AI guidance
-- 💾 **Blob Storage**: Local file management with URL serving
+- 💾 **Media Storage**: Supabase Storage for generated images, references, and video
 - 📚 **API Documentation**: Swagger UI integration
 - 🧪 **Test Interface**: Built-in HTML testing tools
 
@@ -18,7 +18,7 @@ A high-performance backend for AI-powered film production featuring hierarchical
 - **Server**: Fastify + CORS + Swagger
 - **Queue**: BullMQ + Redis
 - **Database**: Supabase (PostgreSQL)
-- **Storage**: Local filesystem
+- **Storage**: Supabase Storage
 - **AI**: Gemini 2.5 Flash, fal.ai, FFmpeg
 
 ## Quick Start
@@ -73,7 +73,7 @@ src/
 │   └── ffmpeg.ts    # Video processing
 ├── models/          # Zod schemas
 ├── routes/          # API endpoints
-├── utils/           # Database, blob, queue utilities
+├── utils/           # Database, context, storage, and queue utilities
 ├── workers/         # Background job processors
 ├── public/          # HTML test interfaces
 └── index.ts         # Main server entry
@@ -98,8 +98,32 @@ src/
 - `POST /api/director/stream` - AI guidance streaming
 - `GET /api/director/pages` - Available page contexts
 
-### Assets
-- `GET /blob/:project/:type/:file` - Serve media files
+## Canvas integration
+
+The creative canvas is a view and control surface over the same production
+architecture. It does not maintain a separate generation pipeline.
+
+- A whole-film, overview, or planning prompt creates an agent run through
+  `POST /api/projects/:projectId/agent-runs`. The Redis-backed orchestration
+  worker acts as the director, streams progress and approval checkpoints, and
+  fans approved work out to the character, scene, frame, video, and stitching
+  workers.
+- A selected character, scene, or shot creates a focused `image-editing` job.
+  Before editing, the worker rebuilds context from Postgres. Character edits
+  inherit the project, cast, and objects; scene and shot edits also inherit the
+  current scene.
+- Canvas selections are sent as focus hints so the director knows what the user
+  is discussing. Project, character, object, and scene facts are always rebuilt
+  from the database before an AI call, so browser state cannot replace the
+  authoritative story context.
+- Generated images and videos remain in Supabase Storage, while their URLs and
+  descriptive metadata stay attached to the corresponding database entities.
+  Later scenes, frames, and edits therefore reuse the same visual references and
+  hierarchical context.
+
+This preserves the original flow—director → orchestration → specialized
+workers—while allowing users to prompt, select, annotate, and iterate directly
+on the canvas.
 
 ## Workflow
 

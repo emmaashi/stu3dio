@@ -7,7 +7,7 @@ import {
   getProject,
   getScenesByProject,
 } from '../utils/database.js';
-import { buildSceneContext } from '../utils/context.js';
+import { buildSceneContext, formatCanvasSelectionForPrompt, formatContextForPrompt } from '../utils/context.js';
 import { addJob, getJobStatus, queueConnection } from '../utils/queue.js';
 import {
   getAgentRun,
@@ -108,6 +108,8 @@ async function generateConcept(runId: string, feedback?: string) {
   const run = await requireActiveRun(runId);
   const project = await getProject(run.project_id);
   const references = getAttachedReferences(run);
+  const inheritedContext = await buildSceneContext(run.project_id);
+  const canvasFocus = formatCanvasSelectionForPrompt(run.context);
   const messageId = crypto.randomUUID();
 
   await updateAgentRun(runId, {
@@ -130,6 +132,8 @@ async function generateConcept(runId: string, feedback?: string) {
     `Project title: ${project?.title || 'Untitled film'}`,
     `Existing summary: ${project?.summary || ''}`,
     `Existing plot: ${project?.plot || ''}`,
+    formatContextForPrompt(inheritedContext),
+    canvasFocus,
     `User direction: ${run.prompt}`,
     references.length ? `Attached visual references: ${references.map(reference => `${reference.name} (${reference.url})`).join(', ')}` : '',
     feedback ? `Requested revision: ${feedback}` : ''
@@ -199,6 +203,8 @@ async function generateConcept(runId: string, feedback?: string) {
 async function generateProductionPlan(runId: string, feedback?: string) {
   const run = await requireActiveRun(runId);
   const concept = run.concept || {};
+  const inheritedContext = await buildSceneContext(run.project_id);
+  const canvasFocus = formatCanvasSelectionForPrompt(run.context);
 
   await updateAgentRun(runId, {
     status: 'thinking',
@@ -213,7 +219,13 @@ async function generateProductionPlan(runId: string, feedback?: string) {
     phase: 'production_plan'
   });
 
-  const prompt = `Approved concept:\n${JSON.stringify(concept, null, 2)}\n\n${feedback ? `Revision request: ${feedback}` : ''}`;
+  const prompt = [
+    `User direction: ${run.prompt}`,
+    `Approved concept:\n${JSON.stringify(concept, null, 2)}`,
+    formatContextForPrompt(inheritedContext),
+    canvasFocus,
+    feedback ? `Revision request: ${feedback}` : ''
+  ].filter(Boolean).join('\n\n');
   const plan = await generateJSON<Record<string, unknown>>(
     prompt,
     productionPlanSchema,
