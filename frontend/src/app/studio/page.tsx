@@ -356,9 +356,6 @@ function StudioWorkspace() {
             </div>
             {ready && boardEmpty && !briefOpen && (
               <div className="studio-empty">
-                <span className="studio-empty-eyebrow">
-                  <Sparkles size={14} /> EVERY FILM STARTS SOMEWHERE
-                </span>
                 <h1>
                   A world waiting
                   <br />

@@ -4,6 +4,9 @@
 
 import {
   HP_PLOT_POINTS,
+  HP_PROMPT,
+  HP_TITLE,
+  HP_SCENES_OVERVIEW,
   HP_DIRECTOR_REPLY,
   HP_CHARACTERS,
   HP_SCENES,
@@ -201,39 +204,30 @@ export function subscribeMockAgentRun(
   };
 }
 
-function mockTitle(prompt: string) {
-  const subject = prompt
-    .replace(/^(create|make|develop|produce)\s+(a\s+)?(cinematic\s+)?(\d+-second\s+)?/i, "")
-    .replace(/^film\s+(about|where)\s+/i, "")
-    .replace(/^.*?\babout\s+/i, "")
-    .split(/[.!?]/)[0]
-    .trim();
-  const words = (subject || "an original short film").split(/\s+/).slice(0, 7);
-  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-}
-
-function mockCharacters(prompt: string) {
-  const premise = prompt || "an original cinematic story";
-  return [
-    { name: "The Lead", role: "Protagonist", age: 32, description: `The emotional point of view for ${premise}`, personality: "Observant, driven, and quietly vulnerable", backstory: "Carries a personal stake in the central mystery." },
-    { name: "The Counterpart", role: "Catalyst", age: 38, description: "The figure who challenges the protagonist's understanding of events.", personality: "Precise, guarded, and persuasive", backstory: "Knows more about the inciting event than they initially reveal." },
-    { name: "The Witness", role: "Supporting", age: 55, description: "A grounded witness who connects the present conflict to its hidden history.", personality: "Patient, perceptive, and morally conflicted", backstory: "Preserved one crucial detail everyone else overlooked." },
-  ];
+function mockCharacters() {
+  return HP_CHARACTERS.map((c) => ({
+    name: c.name,
+    role: c.role,
+    age: c.age,
+    description: c.description,
+    personality: c.personality,
+    backstory: c.backstory,
+  }));
 }
 
 function createMockConceptApproval(prompt: string): AgentApproval {
-  const premise = prompt || "Create an original cinematic short film.";
+  const premise = prompt || HP_PROMPT;
   const values = {
-    title: mockTitle(premise),
-    logline: premise,
-    summary: premise,
-    story_direction: `${premise}\n\nBuild a clear discovery, confrontation, and decisive final image across eight shots.`,
+    title: HP_TITLE,
+    logline: HP_PLOT_POINTS[0],
+    summary: HP_PLOT_POINTS[0],
+    story_direction: `${premise}\n\n${HP_PLOT_POINTS.join("\n\n")}`,
     visual_style: "Cinematic realism with expressive contrast and deliberate camera movement",
     audio_direction: "Atmospheric score, focused dialogue, and tactile environmental sound",
     runtime_seconds: 64,
     aspect_ratio: "16:9",
     shot_seconds: 8,
-    characters: mockCharacters(premise),
+    characters: mockCharacters(),
   };
   return {
     id: uid(),
@@ -254,24 +248,19 @@ function createMockConceptApproval(prompt: string): AgentApproval {
   };
 }
 
-function createMockProductionApproval(prompt: string): AgentApproval {
+function createMockProductionApproval(_prompt: string): AgentApproval {
   const counts = [3, 2, 3];
-  const beats = [
-    { title: "The Inciting Discovery", detail: `Establish the world and the protagonist's immediate stake in this premise: ${prompt}` },
-    { title: "The Truth Surfaces", detail: "Escalate the central contradiction, reveal the hidden connection, and force the protagonist to act." },
-    { title: "The Final Choice", detail: "Resolve the confrontation through a visual decision, then land on a memorable cinematic final image." },
-  ];
-  const scenes = beats.map((scene, index) => ({
+  const scenes = HP_SCENES.map((scene, index) => ({
     id: `scene-${index + 1}`,
     scene_order: index + 1,
     title: scene.title,
-    concise_plot: scene.title,
-    detailed_plot: scene.detail,
-    dialogue: "",
+    concise_plot: scene.concise_plot,
+    detailed_plot: scene.detailed_plot,
+    dialogue: scene.dialogue,
     target_frames: counts[index],
     duration: (counts[index] || 1) * 8,
   }));
-  const values = { overview: "A three-act progression told across eight cinematic shots.", scenes };
+  const values = { overview: HP_SCENES_OVERVIEW, scenes };
   return {
     id: uid(),
     kind: "production_plan" as const,
@@ -288,7 +277,7 @@ function materializeMockProduction(run: AgentRun) {
   const store = ensureStore(run.project_id);
   const conceptCharacters = Array.isArray(run.concept?.characters)
     ? run.concept.characters as Array<Record<string, unknown>>
-    : mockCharacters(run.prompt);
+    : mockCharacters();
   const plannedScenes = Array.isArray(run.production_plan?.scenes)
     ? run.production_plan.scenes as Array<Record<string, unknown>>
     : createMockProductionApproval(run.prompt).values.scenes as Array<Record<string, unknown>>;

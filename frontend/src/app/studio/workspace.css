@@ -745,14 +745,6 @@
   text-align: center;
   pointer-events: none;
 }
-.studio-empty-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 9px;
-  letter-spacing: 1.7px;
-  color: #b5a2cc;
-}
 .studio-empty h1 {
   font-size: clamp(28px, 3.5vw, 45px);
   font-weight: 450;
