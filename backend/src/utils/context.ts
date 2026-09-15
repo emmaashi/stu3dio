@@ -216,6 +216,71 @@ export function injectReferencedContext(
   return contextualText;
 }
 
+/** The subset of a canvas selection that is allowed to shape a prompt. */
+type CanvasAssetContext = {
+  kind?: unknown;
+  label?: unknown;
+  description?: unknown;
+};
+
+/**
+ * Treat canvas selections as routing hints while rebuilding authoritative
+ * story context from the database. This keeps prompts useful without trusting
+ * the browser to supply the project's inherited state.
+ */
+export function formatCanvasSelectionForPrompt(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const assets = (value as { selected_assets?: unknown }).selected_assets;
+  if (!Array.isArray(assets) || assets.length === 0) return '';
+
+  const lines = assets.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== 'object') return [];
+    const asset = candidate as CanvasAssetContext;
+    const label = typeof asset.label === 'string' ? asset.label.trim() : '';
+    const kind = typeof asset.kind === 'string' ? asset.kind.trim() : '';
+    if (!label) return [];
+    const description = typeof asset.description === 'string'
+      ? asset.description.trim()
+      : '';
+    return [`- ${kind ? `${kind}: ` : ''}${label}${description ? ` — ${description}` : ''}`];
+  });
+
+  return lines.length ? `Canvas focus:
+${lines.join('\n')}` : '';
+}
+
+/**
+ * Resolve the context an image edit should inherit from its canvas node.
+ *
+ * Scene and shot edits are scoped to their scene so the edit sees the current
+ * beat; everything else (characters, objects, loose selections) falls back to
+ * project-level context. Throws if the project does not exist, so callers that
+ * treat context as optional should handle that.
+ */
+export async function buildAssetEditContext(
+  projectId: string,
+  metadata: unknown
+): Promise<HierarchicalContext> {
+  const base = await buildSceneContext(projectId);
+  if (!metadata || typeof metadata !== 'object') return base;
+
+  const { node, refId } = metadata as { node?: unknown; refId?: unknown };
+  if (typeof refId !== 'string') return base;
+
+  let sceneId: string | undefined;
+  if (typeof node === 'string' && node.startsWith('scene-')) {
+    sceneId = refId;
+  } else if (typeof node === 'string' && node.startsWith('clip-')) {
+    const frames = await getFramesByProject(projectId);
+    sceneId = frames.find(frame => frame.id === refId)?.scene_id;
+  }
+
+  if (!sceneId) return base;
+  const scenes = await getScenesByProject(projectId);
+  const scene = scenes.find(candidate => candidate.id === sceneId);
+  return scene ? buildFrameContext(projectId, scene) : base;
+}
+
 export function formatContextForPrompt(context: HierarchicalContext): string {
   let prompt = `Project: ${context.project_summary}\nPlot: ${context.plot}\n\n`;
 

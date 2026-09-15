@@ -3,7 +3,7 @@ import { editImage, generateImage, generateCharacterDescription, generateJSONWit
 import { updateJobStatus, queueConnection, addJob } from '../utils/queue.js';
 import { createCharacter, createObject, createFrame, createScene } from '../utils/database.js';
 import { uploadBase64Image, generateFileName, StorageConfigs } from '../utils/storage.js';
-import { buildSceneContext, buildFrameContext, formatContextForPrompt } from '../utils/context.js';
+import { buildAssetEditContext, buildSceneContext, buildFrameContext, formatContextForPrompt } from '../utils/context.js';
 import { SchemaType, type Schema } from '@google/generative-ai';
 
 const connection = queueConnection;
@@ -226,7 +226,7 @@ async function processImageGeneration(job: Job) {
 }
 
 async function processImageEditing(job: Job) {
-  const { input_data } = job.data;
+  const { project_id, input_data } = job.data;
   const { source_url, edit_prompt, type, metadata } = input_data;
 
   try {
@@ -260,7 +260,26 @@ async function processImageEditing(job: Job) {
 
     await updateJobStatus(job.id!, 'processing', 30);
 
-    const editedBuffer = await editImage(sourceBuffer, edit_prompt);
+    // Context is additive: if it cannot be rebuilt we still run the edit the
+    // user asked for, exactly as this worker did before context inheritance.
+    let contextualEditPrompt = edit_prompt;
+    let contextInherited = false;
+    try {
+      const inheritedContext = await buildAssetEditContext(project_id, metadata);
+      contextualEditPrompt = [
+        edit_prompt,
+        'Preserve continuity with the established film context unless the requested edit explicitly changes it.',
+        formatContextForPrompt(inheritedContext)
+      ].filter(Boolean).join('\n\n');
+      contextInherited = true;
+    } catch (contextError) {
+      console.warn(
+        `✏️  [IMAGE EDITING] Falling back to the raw edit prompt for project ${project_id}:`,
+        contextError
+      );
+    }
+
+    const editedBuffer = await editImage(sourceBuffer, contextualEditPrompt);
 
     await updateJobStatus(job.id!, 'processing', 70);
 
@@ -305,6 +324,7 @@ async function processImageEditing(job: Job) {
       edit_prompt,
       source_url,
       metadata,
+      context_inherited: contextInherited,
       edited_at: new Date().toISOString()
     };
 

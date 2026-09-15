@@ -4,3 +4,6 @@ bun.lock
 bash.exe.stackdump
 winget
 *.stackdump
+
+# generated local media fixtures
+backend/src/blob/

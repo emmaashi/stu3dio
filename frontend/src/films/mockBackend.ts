@@ -3,16 +3,24 @@
 // timers: a new film becomes a concept, cast, scenes, shots, then a final film.
 
 import {
-  HP_PLOT_POINTS,
-  HP_DIRECTOR_REPLY,
-  HP_CHARACTERS,
-  HP_SCENES,
-  HP_SHOT_STILLS,
-  HP_CLIP_VIDEO,
-  HP_FINAL_VIDEO,
-  HP_POSTER,
-  hpCharacterByName,
-} from "./harry-potter";
+  NEW_FILM_PLOT_POINTS,
+  NEW_FILM_PROMPT,
+  NEW_FILM_TITLE,
+  NEW_FILM_SCENES_OVERVIEW,
+  NEW_FILM_DIRECTOR_REPLY,
+  NEW_FILM_CHARACTERS,
+  NEW_FILM_SCENES,
+  NEW_FILM_SHOT_STILLS,
+  NEW_FILM_SHOT_COUNTS,
+  NEW_FILM_TOTAL_SHOTS,
+  NEW_FILM_SCENE_COUNT,
+  NEW_FILM_RUNTIME_SECONDS,
+  NEW_FILM_SHOT_SECONDS,
+  NEW_FILM_CLIP_VIDEO,
+  NEW_FILM_FINAL_VIDEO,
+  NEW_FILM_POSTER,
+  newFilmCharacterByName,
+} from "./tears-of-steel/newFilm";
 import type { AgentApproval, AgentEvent, AgentRun } from "@/types/agent";
 
 let enabled = false;
@@ -201,39 +209,30 @@ export function subscribeMockAgentRun(
   };
 }
 
-function mockTitle(prompt: string) {
-  const subject = prompt
-    .replace(/^(create|make|develop|produce)\s+(a\s+)?(cinematic\s+)?(\d+-second\s+)?/i, "")
-    .replace(/^film\s+(about|where)\s+/i, "")
-    .replace(/^.*?\babout\s+/i, "")
-    .split(/[.!?]/)[0]
-    .trim();
-  const words = (subject || "an original short film").split(/\s+/).slice(0, 7);
-  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-}
-
-function mockCharacters(prompt: string) {
-  const premise = prompt || "an original cinematic story";
-  return [
-    { name: "The Lead", role: "Protagonist", age: 32, description: `The emotional point of view for ${premise}`, personality: "Observant, driven, and quietly vulnerable", backstory: "Carries a personal stake in the central mystery." },
-    { name: "The Counterpart", role: "Catalyst", age: 38, description: "The figure who challenges the protagonist's understanding of events.", personality: "Precise, guarded, and persuasive", backstory: "Knows more about the inciting event than they initially reveal." },
-    { name: "The Witness", role: "Supporting", age: 55, description: "A grounded witness who connects the present conflict to its hidden history.", personality: "Patient, perceptive, and morally conflicted", backstory: "Preserved one crucial detail everyone else overlooked." },
-  ];
+function mockCharacters() {
+  return NEW_FILM_CHARACTERS.map((c) => ({
+    name: c.name,
+    role: c.role,
+    age: c.age,
+    description: c.description,
+    personality: c.personality,
+    backstory: c.backstory,
+  }));
 }
 
 function createMockConceptApproval(prompt: string): AgentApproval {
-  const premise = prompt || "Create an original cinematic short film.";
+  const premise = prompt || NEW_FILM_PROMPT;
   const values = {
-    title: mockTitle(premise),
-    logline: premise,
-    summary: premise,
-    story_direction: `${premise}\n\nBuild a clear discovery, confrontation, and decisive final image across eight shots.`,
+    title: NEW_FILM_TITLE,
+    logline: NEW_FILM_PLOT_POINTS[0],
+    summary: NEW_FILM_PLOT_POINTS[0],
+    story_direction: `${premise}\n\n${NEW_FILM_PLOT_POINTS.join("\n\n")}`,
     visual_style: "Cinematic realism with expressive contrast and deliberate camera movement",
     audio_direction: "Atmospheric score, focused dialogue, and tactile environmental sound",
-    runtime_seconds: 64,
+    runtime_seconds: NEW_FILM_RUNTIME_SECONDS,
     aspect_ratio: "16:9",
-    shot_seconds: 8,
-    characters: mockCharacters(premise),
+    shot_seconds: NEW_FILM_SHOT_SECONDS,
+    characters: mockCharacters(),
   };
   return {
     id: uid(),
@@ -245,8 +244,6 @@ function createMockConceptApproval(prompt: string): AgentApproval {
       { id: "title", label: "Title", type: "text" },
       { id: "story_direction", label: "Story direction", type: "textarea" },
       { id: "visual_style", label: "Visual style", type: "text" },
-      { id: "runtime_seconds", label: "Runtime", type: "single-select", options: [24, 64, 96] },
-      { id: "aspect_ratio", label: "Aspect ratio", type: "single-select", options: ["16:9", "9:16", "1:1"] },
       { id: "characters", label: "Cast", type: "summary-list" },
     ],
     values,
@@ -254,24 +251,19 @@ function createMockConceptApproval(prompt: string): AgentApproval {
   };
 }
 
-function createMockProductionApproval(prompt: string): AgentApproval {
-  const counts = [3, 2, 3];
-  const beats = [
-    { title: "The Inciting Discovery", detail: `Establish the world and the protagonist's immediate stake in this premise: ${prompt}` },
-    { title: "The Truth Surfaces", detail: "Escalate the central contradiction, reveal the hidden connection, and force the protagonist to act." },
-    { title: "The Final Choice", detail: "Resolve the confrontation through a visual decision, then land on a memorable cinematic final image." },
-  ];
-  const scenes = beats.map((scene, index) => ({
+function createMockProductionApproval(_prompt: string): AgentApproval {
+  const counts = NEW_FILM_SHOT_COUNTS;
+  const scenes = NEW_FILM_SCENES.map((scene, index) => ({
     id: `scene-${index + 1}`,
     scene_order: index + 1,
     title: scene.title,
-    concise_plot: scene.title,
-    detailed_plot: scene.detail,
-    dialogue: "",
+    concise_plot: scene.concise_plot,
+    detailed_plot: scene.detailed_plot,
+    dialogue: scene.dialogue,
     target_frames: counts[index],
     duration: (counts[index] || 1) * 8,
   }));
-  const values = { overview: "A three-act progression told across eight cinematic shots.", scenes };
+  const values = { overview: NEW_FILM_SCENES_OVERVIEW, scenes };
   return {
     id: uid(),
     kind: "production_plan" as const,
@@ -288,7 +280,7 @@ function materializeMockProduction(run: AgentRun) {
   const store = ensureStore(run.project_id);
   const conceptCharacters = Array.isArray(run.concept?.characters)
     ? run.concept.characters as Array<Record<string, unknown>>
-    : mockCharacters(run.prompt);
+    : mockCharacters();
   const plannedScenes = Array.isArray(run.production_plan?.scenes)
     ? run.production_plan.scenes as Array<Record<string, unknown>>
     : createMockProductionApproval(run.prompt).values.scenes as Array<Record<string, unknown>>;
@@ -302,7 +294,8 @@ function materializeMockProduction(run: AgentRun) {
     emitAgent(run.id, "task.completed", task);
     if (!store.characters.some((item) => item.metadata.name === name)) {
       store.characters.push({
-        id: uid(), project_id: store.project.id, media_url: portraitFor(index),
+        id: uid(), project_id: store.project.id,
+        media_url: newFilmCharacterByName(name)?.media || portraitFor(index),
         metadata: {
           name,
           role: String(character.role || "Supporting"),
@@ -319,11 +312,13 @@ function materializeMockProduction(run: AgentRun) {
 
   setTimeout(() => {
     emitAgent(run.id, "run.status", { status: "running", phase: "videos" });
-    emitAgent(run.id, "activity.started", { id: "mock-video", label: "Rendering eight cinematic clips", phase: "videos" });
+    emitAgent(run.id, "activity.started", { id: "mock-video", label: `Rendering ${NEW_FILM_TOTAL_SHOTS} cinematic clips`, phase: "videos" });
     if (!store.scenes.length) {
-      plannedScenes.slice(0, 3).forEach((source, index) => {
+      plannedScenes.forEach((source, index) => {
+        const fixture = NEW_FILM_SCENES[index];
         const scene: Scene = {
-          id: uid(), project_id: store.project.id, media_url: sceneStill(index),
+          id: uid(), project_id: store.project.id,
+          media_url: fixture?.media || sceneStill(index),
           metadata: {
             scene_order: Number(source.scene_order || index + 1),
             concise_plot: String(source.title || source.concise_plot || `Scene ${index + 1}`),
@@ -333,22 +328,26 @@ function materializeMockProduction(run: AgentRun) {
           created_at: nowISO(), updated_at: nowISO()
         };
         store.scenes.push(scene);
-        spawnFramesForScene(store, scene, Number(source.target_frames || [3, 2, 3][index] || 1));
+        spawnFramesForScene(
+          store,
+          scene,
+          Number(source.target_frames || NEW_FILM_SHOT_COUNTS[index] || 1)
+        );
       });
     }
-    const task = { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "running", progress: 62, completed: 5, total: 8 };
+    const task = { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "running", progress: 62, completed: Math.round(NEW_FILM_TOTAL_SHOTS * 0.62), total: NEW_FILM_TOTAL_SHOTS };
     emitAgent(run.id, "task.progress", task);
   }, 550);
 
   setTimeout(() => {
-    for (const frame of store.frames) frame.video_url = HP_CLIP_VIDEO;
-    emitAgent(run.id, "task.progress", { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "completed", progress: 100, completed: 8, total: 8 });
-    emitAgent(run.id, "activity.completed", { id: "mock-video", label: "8 clips ready for assembly", phase: "videos" });
-    emitAgent(run.id, "insight.created", { id: uid(), title: "Production ready", metrics: [{ label: "Scenes", value: 3 }, { label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Audio", value: "Generated" }] });
+    for (const frame of store.frames) frame.video_url = NEW_FILM_CLIP_VIDEO;
+    emitAgent(run.id, "task.progress", { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "completed", progress: 100, completed: NEW_FILM_TOTAL_SHOTS, total: NEW_FILM_TOTAL_SHOTS });
+    emitAgent(run.id, "activity.completed", { id: "mock-video", label: `${NEW_FILM_TOTAL_SHOTS} clips ready for assembly`, phase: "videos" });
+    emitAgent(run.id, "insight.created", { id: uid(), title: "Production ready", metrics: [{ label: "Scenes", value: NEW_FILM_SCENE_COUNT }, { label: "Clips", value: NEW_FILM_TOTAL_SHOTS }, { label: "Runtime", value: `${NEW_FILM_RUNTIME_SECONDS}s` }, { label: "Audio", value: "Generated" }] });
     const approval = {
       id: uid(), kind: "assembly" as const, title: "Assemble the final film?",
-      description: "8 clips are ready. Stu3dio will join them into a 64-second cut.",
-      status: "pending" as const, fields: [], values: { clips: 8, runtime_seconds: 64, aspect_ratio: "16:9", audio: "generated" }, created_at: nowISO()
+      description: `${NEW_FILM_TOTAL_SHOTS} clips are ready. Stu3dio will join them into a ${NEW_FILM_RUNTIME_SECONDS}-second cut.`,
+      status: "pending" as const, fields: [], values: { clips: NEW_FILM_TOTAL_SHOTS, runtime_seconds: NEW_FILM_RUNTIME_SECONDS, aspect_ratio: "16:9", audio: "generated" }, created_at: nowISO()
     };
     run.approval = approval;
     run.status = "awaiting_approval";
@@ -383,11 +382,11 @@ function ensureStore(id: string): Store {
 }
 
 // Hardcoded "prompt -> film" demo: whatever the user types, the director shapes
-// it into Harry Potter and the Philosopher's Stone so the full flow can play
-// without any API keys. (Swap this fixture out once real generation is wired.)
+// it into Tears of Steel so the full flow can play without any API keys.
+// (Swap this fixture out once real generation is wired.)
 function makeConverseResponse(store: Store, _message: string) {
-  const plot_points = HP_PLOT_POINTS;
-  const characters = HP_CHARACTERS.map((c) => ({
+  const plot_points = NEW_FILM_PLOT_POINTS;
+  const characters = NEW_FILM_CHARACTERS.map((c) => ({
     name: c.name,
     role: c.role,
     age: c.age,
@@ -395,7 +394,7 @@ function makeConverseResponse(store: Store, _message: string) {
     personality: c.personality,
     backstory: c.backstory,
   }));
-  const response = HP_DIRECTOR_REPLY;
+  const response = NEW_FILM_DIRECTOR_REPLY;
   store.project.plot =
     `Plot:\n${plot_points.join("\n\n")}\n\nCharacters:\n` +
     characters.map((c) => `${c.name} (${c.role}): ${c.description}`).join("\n");
@@ -440,27 +439,30 @@ function startJob(
 }
 
 function spawnFramesForScene(store: Store, scene: Scene, count: number) {
-  // Pull shot stills from THIS scene's curated pool so each shot matches the
-  // scene (train shots under the Express, cloister shots under the corridor),
-  // rather than a global rotating pool that mixed unrelated locations.
-  const hp = HP_SCENES[(scene.metadata.scene_order - 1) % HP_SCENES.length];
-  const pool = hp?.shots?.length ? hp.shots : HP_SHOT_STILLS;
+  // Pull shots from THIS scene's own frames so each shot matches the scene and
+  // carries the caption the film gives it, rather than a global rotating pool
+  // that mixed unrelated locations behind a generated "Shot N" label.
+  const fixture = NEW_FILM_SCENES[(scene.metadata.scene_order - 1) % NEW_FILM_SCENES.length];
+  const shots = fixture?.shots?.length
+    ? fixture.shots
+    : NEW_FILM_SHOT_STILLS.map((still) => ({ still, caption: "" }));
   for (let i = 0; i < count; i++) {
     const id = uid();
     store.shotSeq += 1;
-    const shot = pool[i % pool.length];
+    const shot = shots[i % shots.length];
+    const caption = shot.caption || `${scene.metadata.concise_plot} (beat ${i + 1})`;
     const frame: Frame = {
       id,
       project_id: store.project.id,
       scene_id: scene.id,
-      media_url: shot,
+      media_url: shot.still,
       video_url: "",
       metadata: {
         frame_order: i,
         scene_order: scene.metadata.scene_order,
-        concise_plot: `Shot ${i + 1} · ${scene.metadata.concise_plot}`,
-        summary: `${scene.metadata.concise_plot} (beat ${i + 1})`,
-        veo3_prompt: `Cinematic 8s shot: ${scene.metadata.detailed_plot}. Beat ${i + 1}.`,
+        concise_plot: caption,
+        summary: caption,
+        veo3_prompt: `Cinematic 8s shot: ${scene.metadata.detailed_plot}. ${caption}.`,
         dialogue: "",
         duration: 8,
       },
@@ -471,9 +473,9 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
     // Auto-generate the clip shortly after so the pipeline reaches completion
     // without manual triggering — staggered per shot so they fill in one by one.
     setTimeout(() => {
-      frame.video_url = HP_CLIP_VIDEO;
+      frame.video_url = NEW_FILM_CLIP_VIDEO;
       frame.updated_at = nowISO();
-    }, 1400 + i * 600 + Math.random() * 400);
+    }, 900 + i * 380 + Math.random() * 250);
   }
 }
 
@@ -531,7 +533,7 @@ export async function handleMock(
       prompt: body?.prompt || "",
       status: "queued",
       phase: "concept",
-      settings: { runtime_seconds: 64, aspect_ratio: "16:9", shot_seconds: 8, ...(body?.settings || {}) },
+      settings: { runtime_seconds: NEW_FILM_RUNTIME_SECONDS, aspect_ratio: "16:9", shot_seconds: NEW_FILM_SHOT_SECONDS, ...(body?.settings || {}) },
       context: body?.context || {},
       tasks: [],
       artifacts: [],
@@ -549,7 +551,7 @@ export async function handleMock(
       emitAgent(runId, "activity.started", { id: "mock-concept", label: "Structuring the story", phase: "concept" });
       emitAgent(runId, "message.started", { id: "mock-director", role: "assistant" });
       const chunks = [
-        "I’m shaping this into a focused 64-second short with a clear visual arc. ",
+        `I’m shaping this into a focused ${NEW_FILM_RUNTIME_SECONDS}-second short with a clear visual arc. `,
         "The cast, tone, and production constraints are ready for your review before any media is generated."
       ];
       chunks.forEach((chunk, index) => setTimeout(() => emitAgent(runId, "message.delta", { id: "mock-director", role: "assistant", delta: chunk }), 180 * (index + 1)));
@@ -592,7 +594,7 @@ export async function handleMock(
       run.status = "thinking";
       run.phase = "production_plan";
       emitAgent(run.id, "run.status", { status: "thinking", phase: "production_plan" });
-      emitAgent(run.id, "activity.started", { id: "mock-plan", label: body?.decision === "revise" ? "Revising the creative brief" : "Planning eight cinematic shots", phase: "production_plan" });
+      emitAgent(run.id, "activity.started", { id: "mock-plan", label: body?.decision === "revise" ? "Revising the creative brief" : `Planning ${NEW_FILM_TOTAL_SHOTS} cinematic shots`, phase: "production_plan" });
       setTimeout(() => {
         const next = body?.decision === "revise" ? createMockConceptApproval(run.prompt) : createMockProductionApproval(run.prompt);
         run.approval = next as any;
@@ -619,12 +621,12 @@ export async function handleMock(
       emitAgent(run.id, "run.status", { status: "running", phase: "assembly" });
       emitAgent(run.id, "activity.started", { id: "mock-assembly", label: "Assembling the final film", phase: "assembly" });
       setTimeout(() => {
-        store.project.final_video_url = HP_FINAL_VIDEO;
-        store.project.poster_url = HP_POSTER;
+        store.project.final_video_url = NEW_FILM_FINAL_VIDEO;
+        store.project.poster_url = NEW_FILM_POSTER;
         run.status = "completed";
         emitAgent(run.id, "activity.completed", { id: "mock-assembly", label: "Final film assembled", phase: "assembly" });
-        emitAgent(run.id, "insight.created", { id: uid(), title: "Your film is ready", metrics: [{ label: "Clips", value: 8 }, { label: "Runtime", value: "64s" }, { label: "Format", value: "16:9" }], artifact_url: HP_FINAL_VIDEO });
-        emitAgent(run.id, "run.completed", { video_url: HP_FINAL_VIDEO });
+        emitAgent(run.id, "insight.created", { id: uid(), title: "Your film is ready", metrics: [{ label: "Clips", value: NEW_FILM_TOTAL_SHOTS }, { label: "Runtime", value: `${NEW_FILM_RUNTIME_SECONDS}s` }, { label: "Format", value: "16:9" }], artifact_url: NEW_FILM_FINAL_VIDEO });
+        emitAgent(run.id, "run.completed", { video_url: NEW_FILM_FINAL_VIDEO });
         emitAgent(run.id, "run.status", { status: "completed", phase: "assembly" });
       }, 850);
     }
@@ -665,8 +667,8 @@ export async function handleMock(
   if (method === "POST" && (m = path.match(/^\/api\/projects\/([^/]+)\/confirm-video$/))) {
     const s = ensureStore(m[1]);
     const job_id = startJob("video-stitching", () => {
-      s.project.final_video_url = HP_FINAL_VIDEO;
-      s.project.poster_url = HP_POSTER;
+      s.project.final_video_url = NEW_FILM_FINAL_VIDEO;
+      s.project.poster_url = NEW_FILM_POSTER;
       s.project.updated_at = nowISO();
     });
     return { message: "Video assembly started", job_id };
@@ -750,8 +752,8 @@ export async function handleMock(
     const ctx = body.context || {};
     const name = ctx.name || body.name || "Character";
     // The director only forwards name/role/description, so the mock owns the
-    // rich HP metadata + the real portrait (matched by name).
-    const hp = hpCharacterByName(name);
+    // rich fixture metadata + the real portrait (matched by name).
+    const fixture = newFilmCharacterByName(name);
     const id = uid();
     const portraitIndex = s.characters.length;
     s.characters.push({
@@ -761,16 +763,16 @@ export async function handleMock(
       loading: true,
       metadata: {
         name,
-        role: hp?.role || ctx.role || "Supporting",
-        age: hp?.age ?? (typeof ctx.age === "number" && ctx.age > 0 ? ctx.age : 30),
-        description: hp?.description || ctx.description || body.prompt || "A key character.",
-        personality: hp?.personality || ctx.personality || "Distinct and memorable.",
-        backstory: hp?.backstory || ctx.backstory || "Has a history that informs their choices.",
+        role: fixture?.role || ctx.role || "Supporting",
+        age: fixture?.age ?? (typeof ctx.age === "number" && ctx.age > 0 ? ctx.age : 30),
+        description: fixture?.description || ctx.description || body.prompt || "A key character.",
+        personality: fixture?.personality || ctx.personality || "Distinct and memorable.",
+        backstory: fixture?.backstory || ctx.backstory || "Has a history that informs their choices.",
       },
       created_at: nowISO(),
       updated_at: nowISO(),
     });
-    const portrait = hp?.media || portraitFor(portraitIndex);
+    const portrait = fixture?.media || portraitFor(portraitIndex);
     // Stagger the cast so portraits resolve one after another.
     const job_id = startJob(
       "character-generation",
@@ -788,38 +790,47 @@ export async function handleMock(
   }
   if (method === "POST" && path === "/api/jobs/scene-generation") {
     const s = ensureStore(body.project_id);
-    const order = body.scene_order || s.sceneCount + 1;
-    s.sceneCount = Math.max(s.sceneCount, order);
-    const frames = body.target_frames || 2;
-    const hp = HP_SCENES[(order - 1) % HP_SCENES.length];
-    const id = uid();
-    const scene: Scene = {
-      id,
-      project_id: s.project.id,
-      media_url: "",
-      loading: true,
-      metadata: {
-        scene_order: order,
-        concise_plot: hp?.title || body.scene_description || `Scene ${order}`,
-        detailed_plot:
-          hp?.detailed_plot || body.plot_context || `Scene ${order} unfolds.`,
-        dialogue: hp?.dialogue || "",
-      },
-      created_at: nowISO(),
-      updated_at: nowISO(),
-    };
-    s.scenes.push(scene);
+    // The caller loops a fixed three times with its own target_frames, but the
+    // demo film is ten scenes with its own shot counts. Materialize the whole
+    // film on the first request; later requests just ride the same reveal.
+    if (s.scenes.length) return { job_id: startJob("scene-generation", () => {}, 300) };
+
+    s.sceneCount = NEW_FILM_SCENES.length;
+    const pending = NEW_FILM_SCENES.map((fixture, index) => {
+      const order = index + 1;
+      const scene: Scene = {
+        id: uid(),
+        project_id: s.project.id,
+        media_url: "",
+        loading: true,
+        metadata: {
+          scene_order: order,
+          concise_plot: fixture.title,
+          detailed_plot: fixture.detailed_plot,
+          dialogue: fixture.dialogue,
+        },
+        created_at: nowISO(),
+        updated_at: nowISO(),
+      };
+      s.scenes.push(scene);
+      return { scene, fixture, order };
+    });
+
     // Scenes resolve after the cast has come in, then fan out into their shots.
-    const job_id = startJob(
-      "scene-generation",
-      () => {
-        scene.media_url = hp?.media || sceneStill(order - 1);
-        scene.loading = false;
-        scene.updated_at = nowISO();
-        spawnFramesForScene(s, scene, frames);
-      },
-      2800 + (order - 1) * 850 + Math.random() * 300
-    );
+    let job_id = "";
+    pending.forEach(({ scene, fixture, order }, index) => {
+      const id = startJob(
+        "scene-generation",
+        () => {
+          scene.media_url = fixture.media || sceneStill(order - 1);
+          scene.loading = false;
+          scene.updated_at = nowISO();
+          spawnFramesForScene(s, scene, NEW_FILM_SHOT_COUNTS[index] || 1);
+        },
+        1800 + index * 320 + Math.random() * 200
+      );
+      if (!job_id) job_id = id;
+    });
     return { job_id };
   }
   if (method === "POST" && path === "/api/jobs/script-enhancement") {
@@ -840,7 +851,7 @@ export async function handleMock(
     const job_id = startJob("video-generation", () => {
       const frame = s.frames.find((f) => f.id === frameId);
       if (frame) {
-        frame.video_url = HP_CLIP_VIDEO;
+        frame.video_url = NEW_FILM_CLIP_VIDEO;
         frame.updated_at = nowISO();
       }
     });
@@ -853,24 +864,31 @@ export async function handleMock(
       const rnd = Math.floor(Math.random() * 1000);
       const char = s.characters.find((c) => c.media_url === src);
       if (char) {
-        char.media_url = portraitFor(rnd);
+        const pool = NEW_FILM_SHOT_STILLS.filter((still) => still !== src);
+        char.media_url = pool.length
+          ? pool[rnd % pool.length]
+          : portraitFor(rnd);
         return;
       }
       const scene = s.scenes.find((sc) => sc.media_url === src);
       if (scene) {
-        scene.media_url = sceneStill(rnd);
+        const pool = NEW_FILM_SHOT_STILLS.filter((still) => still !== src);
+        scene.media_url = pool.length ? pool[rnd % pool.length] : sceneStill(rnd);
         return;
       }
       const frame = s.frames.find((f) => f.media_url === src);
-      if (frame) frame.media_url = sceneStill(rnd);
+      if (frame) {
+        const pool = NEW_FILM_SHOT_STILLS.filter((still) => still !== src);
+        frame.media_url = pool.length ? pool[rnd % pool.length] : sceneStill(rnd);
+      }
     });
     return { job_id };
   }
   if (method === "POST" && path === "/api/jobs/video-stitching") {
     const s = ensureStore(body.project_id);
     const job_id = startJob("video-stitching", () => {
-      s.project.final_video_url = HP_FINAL_VIDEO;
-      s.project.poster_url = HP_POSTER;
+      s.project.final_video_url = NEW_FILM_FINAL_VIDEO;
+      s.project.poster_url = NEW_FILM_POSTER;
       s.project.updated_at = nowISO();
     });
     return { job_id };
