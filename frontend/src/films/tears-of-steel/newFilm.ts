@@ -106,6 +106,14 @@ export const NEW_FILM_TOTAL_SHOTS = NEW_FILM_SHOT_COUNTS.reduce(
   0
 );
 
+// Each shot is an 8-second clip, so the cut length follows the shot count
+// rather than a fixed 64 seconds.
+export const NEW_FILM_SHOT_SECONDS = 8;
+export const NEW_FILM_RUNTIME_SECONDS =
+  NEW_FILM_TOTAL_SHOTS * NEW_FILM_SHOT_SECONDS;
+
+export const NEW_FILM_SCENE_COUNT = NEW_FILM_SCENES.length;
+
 export const NEW_FILM_PLOT_POINTS = [
   DEMO_PROJECT.summary,
   ...NEW_FILM_SCENES.map((scene) => scene.detailed_plot),

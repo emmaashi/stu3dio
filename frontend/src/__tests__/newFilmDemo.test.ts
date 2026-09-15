@@ -4,6 +4,8 @@ import {
   NEW_FILM_FINAL_VIDEO,
   NEW_FILM_PROMPT,
   NEW_FILM_SCENES,
+  NEW_FILM_RUNTIME_SECONDS,
+  NEW_FILM_SCENE_COUNT,
   NEW_FILM_SHOT_COUNTS,
   NEW_FILM_TITLE,
   NEW_FILM_TOTAL_SHOTS,
@@ -99,7 +101,7 @@ describe("new-film demo fixture", () => {
     expect(fieldIds).not.toContain("aspect_ratio");
     expect(fieldIds).not.toContain("runtime_seconds");
     expect(approval.values.aspect_ratio).toBe("16:9");
-    expect(approval.values.runtime_seconds).toBe(64);
+    expect(approval.values.runtime_seconds).toBe(NEW_FILM_RUNTIME_SECONDS);
   });
 
   it("generates the whole film, not a three-scene cut", async () => {
@@ -135,4 +137,52 @@ describe("new-film demo fixture", () => {
       status.frames.map((f: { metadata: { concise_plot: string } }) => f.metadata.concise_plot)
     ).toContain("Celia and her fallen steel");
   }, 20000);
+
+  // The orchestration path built its scenes separately from the job path and
+  // capped them at three with stock stills, so it needs its own coverage.
+  it("generates the whole film on the orchestration path too", async () => {
+    const project = await newProject();
+    const run = await handleMock(
+      "POST",
+      `/api/projects/${project.id}/agent-runs`,
+      { kind: "create-film", prompt: NEW_FILM_PROMPT }
+    );
+
+    // Approve the concept, then the shot plan, to reach production.
+    for (const kind of ["concept", "production_plan"]) {
+      let approval = null;
+      for (let i = 0; i < 200 && !approval; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        const current = await handleMock("GET", `/api/agent-runs/${run.id}`, null);
+        const pending = current.approval;
+        if (pending?.status === "pending" && pending.kind === kind) approval = pending;
+      }
+      expect(approval, `${kind} approval never arrived`).toBeTruthy();
+      await handleMock(
+        "POST",
+        `/api/agent-runs/${run.id}/approvals/${approval.id}`,
+        { decision: "approve", values: approval.values }
+      );
+    }
+
+    let status = null;
+    for (let i = 0; i < 200; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      status = await handleMock("GET", `/api/projects/${project.id}/complete`, null);
+      if (status.frames.length >= NEW_FILM_TOTAL_SHOTS) break;
+    }
+
+    expect(status.scenes).toHaveLength(NEW_FILM_SCENE_COUNT);
+    expect(status.frames).toHaveLength(NEW_FILM_TOTAL_SHOTS);
+    // Scene stills come from the film, not the stock pool.
+    for (const scene of status.scenes) {
+      expect(scene.media_url).toMatch(/^https:\/\/upload\.wikimedia\.org\//);
+    }
+  }, 30000);
+
+  it("derives runtime from the shot count instead of a fixed 64s", () => {
+    expect(NEW_FILM_TOTAL_SHOTS).toBe(19);
+    expect(NEW_FILM_RUNTIME_SECONDS).toBe(19 * 8);
+    expect(NEW_FILM_SCENE_COUNT).toBe(10);
+  });
 });
