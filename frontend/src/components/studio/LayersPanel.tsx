@@ -1,237 +1,194 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { useState } from "react";
+import { ChevronDown, FileText, Film, Search, Users, X } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
-import { Icon } from "./Icon";
-import { cn } from "@/lib/utils";
 import type { StudioGraph } from "./types";
 
-const EASE_CINE = [0.22, 0.61, 0.36, 1] as const;
-
-const ROW_BASE =
-  "flex items-center gap-[9px] w-full px-[9px] py-[3px] rounded-[10px] text-[13px] text-left border border-transparent transition-colors";
-const ROW_ON = "bg-glass-2 text-ink border-white/[.18]";
-const ROW_OFF = "text-ink-2 hover:bg-glass hover:text-ink";
-
-type Leaf = {
-  key: string;
-  label: string;
-  icon: string;
-  status?: "pending" | "generating" | "completed";
-};
-type Group = {
-  groupKey: string; // collapse key
-  focusKey?: string; // canvas node to pan to (groups without a node, e.g. Cast, omit this)
-  label: string;
-  icon: string;
-  count: number;
-  children: Leaf[];
-};
-type Item =
-  | { type: "leaf"; leaf: Leaf }
-  | { type: "group"; group: Group };
-
-export default function LayersPanel({ graph }: { graph: StudioGraph }) {
-  const selectedKey = useStudioStore((s) => s.selectedKey);
+export default function LayersPanel({
+  graph,
+}: {
+  graph: StudioGraph;
+  onCollapse: () => void;
+}) {
+  const selectedKeys = useStudioStore((s) => s.selectedKeys);
   const focus = useStudioStore((s) => s.focus);
+  const select = useStudioStore((s) => s.select);
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  const toggle = (groupKey: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupKey)) next.delete(groupKey);
-      else next.add(groupKey);
+  const toggle = (key: string) =>
+    setCollapsed((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
-
-  const items = useMemo<Item[]>(() => {
-    const out: Item[] = [];
-    if (graph.overview)
-      out.push({
-        type: "leaf",
-        leaf: {
-          key: "overview",
-          label: graph.overview.title || "Concept",
-          icon: "doc",
-        },
-      });
-
-    if (graph.characters.length > 0) {
-      out.push({
-        type: "group",
-        group: {
-          groupKey: "cast",
-          // Cast has no canvas node — clicking it should only collapse/expand.
-          label: "Cast",
-          icon: "user",
-          count: graph.characters.length,
-          children: graph.characters.map((c) => ({
-            key: `char-${c.id}`,
-            label: c.name || "Character",
-            icon: "user",
-          })),
-        },
-      });
-    }
-
-    graph.scenes.forEach((s) => {
-      out.push({
-        type: "group",
-        group: {
-          groupKey: `scene-${s.id}`,
-          focusKey: `scene-${s.id}`,
-          label: `Scene ${s.order}${s.plot ? ` · ${s.plot}` : ""}`,
-          icon: "scene",
-          count: s.clips.length,
-          children: s.clips.map((clip, i) => ({
-            key: `clip-${clip.id}`,
-            label: `Shot ${String(i + 1).padStart(2, "0")} · ${clip.label}`,
-            icon: "clapper",
-            status: clip.status,
-          })),
-        },
-      });
-    });
-
-    out.push({
-      type: "leaf",
-      leaf: { key: "film", label: "Final film", icon: "play" },
-    });
-    return out;
-  }, [graph]);
-
-  const q = query.trim().toLowerCase();
-  const matches = (s: string) => s.toLowerCase().includes(q);
-
+  const matches = (text: string) =>
+    text.toLowerCase().includes(query.toLowerCase());
+  const chars = graph.characters.filter((c) => matches(`${c.name} ${c.role}`));
   return (
-    <aside className="flex flex-col min-h-0 flex-1 w-full bg-surface-1 overflow-y-auto">
-      <div className="flex gap-[14px] px-4 pt-[14px] pb-2.5">
-        <span className="text-[13px] font-semibold text-ink cursor-default">Assets</span>
-      </div>
-      <div className="px-3 pb-2.5">
+    <div className="studio-layers">
+      <label className="studio-asset-search">
+        <Search size={14} />
         <input
-          className="w-full px-[11px] py-[7px] rounded-[10px] text-[13px] text-ink bg-glass border border-hair outline-none focus:border-white/[.22]"
+          aria-label="Search assets"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search assets…"
+          placeholder="Find in your film…"
         />
-      </div>
-      <div className="scroll flex-1 min-h-0 px-2 py-0.5 overflow-y-auto">
-        {items.map((item) => {
-          if (item.type === "leaf") {
-            const r = item.leaf;
-            if (q && !matches(r.label)) return null;
-            return <LeafRow key={r.key} r={r} lead selectedKey={selectedKey} focus={focus} />;
-          }
-
-          const g = item.group;
-          // While searching, only show groups with a matching label or child.
-          const childMatches = g.children.filter((c) => !q || matches(c.label));
-          if (q && !matches(g.label) && childMatches.length === 0) return null;
-          // Auto-expand on search; otherwise honor collapsed state.
-          const isCollapsed = !q && collapsed.has(g.groupKey);
-          const shown = q ? childMatches : g.children;
-          const groupOn = !!g.focusKey && selectedKey === g.focusKey;
-
+        {query && (
+          <button onClick={() => setQuery("")} aria-label="Clear search">
+            <X size={12} />
+          </button>
+        )}
+      </label>
+      <div className="studio-layer-scroll">
+        {(!query || matches("story brief")) && (
+          <button
+            className={`studio-layer-brief ${selectedKeys.includes("overview") ? "is-selected" : ""}`}
+            onClick={() => select("overview")}
+          >
+            <FileText size={15} />
+            <span>
+              Story brief<small>The foundation of your film</small>
+            </span>
+          </button>
+        )}
+        {!!chars.length && (
+          <section>
+            <button
+              className="studio-layer-section"
+              aria-expanded={!collapsed.has("cast") || !!query}
+              onClick={() => toggle("cast")}
+            >
+              <ChevronDown
+                size={13}
+                className={
+                  collapsed.has("cast") && !query ? "is-collapsed" : ""
+                }
+              />
+              <Users size={13} />
+              <span>Cast</span>
+              <small>{chars.length}</small>
+            </button>
+            {(!collapsed.has("cast") || query) &&
+              chars.map((c) => (
+                <button
+                  key={c.id}
+                  className={`studio-layer-row ${selectedKeys.includes(`char-${c.id}`) ? "is-selected" : ""}`}
+                  aria-label={`${c.name}. Shift-click to select multiple`}
+                  aria-pressed={selectedKeys.includes(`char-${c.id}`)}
+                  onClick={(event) =>
+                    focus(`char-${c.id}`, { additive: event.shiftKey })
+                  }
+                >
+                  {c.media ? <img src={c.media} alt="" /> : <Users size={16} />}
+                  <span>
+                    {c.name}
+                    <small>{c.role || "Character"}</small>
+                  </span>
+                </button>
+              ))}
+          </section>
+        )}
+        {graph.scenes.some(
+          (s) =>
+            matches(`${s.plot} Scene ${s.order}`) ||
+            s.clips.some((c) => matches(c.label)),
+        ) && (
+          <div className="studio-layer-section studio-layer-section--label">
+            <Film size={13} />
+            <span>Scenes</span>
+            <small>{graph.scenes.length}</small>
+          </div>
+        )}
+        {graph.scenes.map((scene) => {
+          const sceneMatch = matches(`${scene.plot} Scene ${scene.order}`);
+          const clips = scene.clips.filter(
+            (clip) => !query || sceneMatch || matches(clip.label),
+          );
+          if (query && !sceneMatch && !clips.length) return null;
+          const open = !!query || collapsed.has(scene.id);
+          const key = `scene-${scene.id}`;
           return (
-            <div key={g.groupKey} className="flex flex-col">
-              <button
-                className={cn("group", ROW_BASE, groupOn ? ROW_ON : ROW_OFF)}
-                onClick={() => {
-                  toggle(g.groupKey);
-                  if (g.focusKey) focus(g.focusKey);
-                }}
-                title={g.label}
+            <section key={scene.id} className="studio-layer-scene">
+              <div
+                className={`studio-layer-scene-heading ${selectedKeys.includes(key) ? "is-selected" : ""}`}
               >
-                <motion.span
-                  className="grid place-items-center w-4 shrink-0 text-ink-3 group-hover:text-ink"
-                  animate={{ rotate: isCollapsed ? 0 : 90 }}
-                  transition={{ duration: 0.2, ease: EASE_CINE }}
+                <button
+                  className="studio-layer-disclosure"
+                  aria-label={`${open ? "Collapse" : "Expand"} Scene ${scene.order} shots`}
+                  aria-expanded={open}
+                  onClick={() => toggle(scene.id)}
                 >
-                  <Icon name="caretRight" size={12} />
-                </motion.span>
-                <span
-                  className={cn(
-                    "grid place-items-center shrink-0",
-                    groupOn ? "text-ink" : "text-ink-3"
-                  )}
+                  <ChevronDown
+                    size={13}
+                    className={!open ? "is-collapsed" : ""}
+                  />
+                </button>
+                <button
+                  className="studio-layer-row"
+                  onClick={(event) => focus(key, { additive: event.shiftKey })}
+                  aria-pressed={selectedKeys.includes(key)}
+                  aria-label={`Scene ${scene.order}. ${scene.plot}`}
                 >
-                  <Icon name={g.icon} size={14} />
-                </span>
-                <span className="flex-1 truncate">{g.label}</span>
-                <span className="shrink-0 min-w-[18px] h-[18px] px-[5px] rounded-pill grid place-items-center text-[11px] font-semibold text-ink-3 bg-hair-2">
-                  {g.count}
-                </span>
-              </button>
-              <AnimatePresence initial={false}>
-                {!isCollapsed && (
-                  <motion.div
-                    key="children"
-                    className="overflow-hidden"
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.24, ease: EASE_CINE }}
+                  <span className="studio-scene-number">
+                    {String(scene.order).padStart(2, "0")}
+                  </span>
+                  <span>
+                    Scene {scene.order}
+                    <small>{scene.plot || "Untitled scene"}</small>
+                  </span>
+                  <small className="studio-layer-count">
+                    {scene.clips.length}
+                  </small>
+                </button>
+              </div>
+              {open &&
+                clips.map((clip) => (
+                  <button
+                    key={clip.id}
+                    className={`studio-layer-shot ${selectedKeys.includes(`clip-${clip.id}`) ? "is-selected" : ""}`}
+                    aria-label={`Shot ${String(clip.order + 1).padStart(2, "0")} · ${clip.label}. Shift-click to select multiple`}
+                    aria-pressed={selectedKeys.includes(`clip-${clip.id}`)}
+                    onClick={(event) =>
+                      focus(`clip-${clip.id}`, { additive: event.shiftKey })
+                    }
                   >
-                    {shown.map((c) => (
-                      <LeafRow
-                        key={c.key}
-                        r={c}
-                        indent
-                        selectedKey={selectedKey}
-                        focus={focus}
-                      />
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+                    <span className={`studio-shot-dot ${clip.status}`} />
+                    <span>
+                      Shot {String(clip.order + 1).padStart(2, "0")}
+                      <small>{clip.label}</small>
+                    </span>
+                  </button>
+                ))}
+            </section>
           );
         })}
-        {items.length === 0 && <div className="p-4 text-[13px] slate">No layers yet</div>}
-      </div>
-    </aside>
-  );
-}
-
-function LeafRow({
-  r,
-  indent,
-  lead,
-  selectedKey,
-  focus,
-}: {
-  r: Leaf;
-  indent?: boolean;
-  lead?: boolean;
-  selectedKey: string | null;
-  focus: (key: string) => void;
-}) {
-  const on = selectedKey === r.key;
-  return (
-    <button
-      className={cn(ROW_BASE, on ? ROW_ON : ROW_OFF, indent && "pl-[50px]")}
-      onClick={() => focus(r.key)}
-      title={r.label}
-    >
-      {lead && <span className="w-4 shrink-0" aria-hidden />}
-      <span className={cn("grid place-items-center shrink-0", on ? "text-ink" : "text-ink-3")}>
-        <Icon name={r.icon} size={14} />
-      </span>
-      <span className="flex-1 truncate">{r.label}</span>
-      {r.status && (
-        <span
-          className={cn(
-            "w-[7px] h-[7px] rounded-full shrink-0",
-            r.status === "pending" && "bg-ink-4",
-            r.status === "generating" && "bg-writer animate-soft-pulse",
-            r.status === "completed" && "bg-ok"
+        {!!graph.overview?.finalVideoUrl &&
+          (!query || matches("final film")) && (
+            <button
+              className={`studio-layer-brief ${selectedKeys.includes("film") ? "is-selected" : ""}`}
+              onClick={() => focus("film")}
+            >
+              <Film size={15} />
+              <span>
+                Final film<small>Preview your assembled story</small>
+              </span>
+            </button>
           )}
-          aria-hidden
-        />
-      )}
-    </button>
+        {query &&
+          !chars.length &&
+          !graph.scenes.some(
+            (s) =>
+              matches(`${s.plot} Scene ${s.order}`) ||
+              s.clips.some((c) => matches(c.label)),
+          ) && (
+            <p className="studio-search-empty">
+              No cast or scenes match “{query}”.
+            </p>
+          )}
+      </div>
+    </div>
   );
 }

@@ -19,8 +19,8 @@ type Props = {
   // While the new-film hero composer is up it drives the cast step, so the rail
   // is non-interactive.
   heroActive?: boolean;
-  onOpenScenes: () => void;
-  onOpenFinal: () => void;
+  onOpenScenes?: () => void;
+  onOpenFinal?: () => void;
 };
 
 // Derive how far the pipeline has progressed from the current graph.
@@ -55,14 +55,14 @@ export default function StepRail({
   // automatically, so neither opens a popup from the rail.
   const open =
     !heroActive && active === "scenes"
-      ? onOpenScenes
+      ? onOpenScenes || null
       : !heroActive && active === "film"
-      ? onOpenFinal
+      ? onOpenFinal || null
       : null;
 
   const stepLabel = `Step ${activeIdx + 1} of ${STEPS.length} · ${STEPS[activeIdx]?.label}`;
   const hint = filmDone
-    ? "Your film is ready - open to regenerate."
+    ? "Your film is ready."
     : STEPS[activeIdx]?.hint;
 
   const Header = (
@@ -98,6 +98,15 @@ export default function StepRail({
       >
         <motion.div
           className="h-full rounded-[inherit] bg-[linear-gradient(90deg,color-mix(in_oklab,var(--accent)_80%,#fff_20%),var(--accent))]"
+          style={
+            filmDone
+              ? {
+                  background:
+                    "linear-gradient(90deg, var(--motion-accent-bright), var(--motion-accent))",
+                  boxShadow: "0 0 10px var(--motion-accent-tint)",
+                }
+              : undefined
+          }
           initial={false}
           animate={{ width: `${Math.round(pct * 100)}%` }}
           transition={{ duration: 0.45, ease: [0.22, 0.61, 0.36, 1] }}

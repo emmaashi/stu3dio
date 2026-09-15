@@ -23,7 +23,8 @@ export function getRecents(): RecentProject[] {
     const parsed = JSON.parse(raw) as RecentProject[];
     if (!Array.isArray(parsed)) return [];
     return parsed.sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
     );
   } catch {
     return [];
@@ -97,4 +98,40 @@ export function setDemoHidden(id: string, v: boolean): void {
   if (v) set.add(id);
   else set.delete(id);
   window.localStorage.setItem(DEMO_HIDDEN_KEY, JSON.stringify([...set]));
+}
+
+const TRASH_KEY = "stu3dio.trash.v1";
+export function getTrashed(): RecentProject[] {
+  if (!isBrowser()) return [];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(TRASH_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+export function trashRecent(id: string): void {
+  if (!isBrowser()) return;
+  const project = getRecents().find((item) => item.id === id);
+  if (!project) return;
+  // Save the recoverable copy before removing it from the library.
+  window.localStorage.setItem(
+    TRASH_KEY,
+    JSON.stringify([project, ...getTrashed().filter((item) => item.id !== id)]),
+  );
+  removeRecent(id);
+}
+export function restoreRecent(id: string): void {
+  if (!isBrowser()) return;
+  const trash = getTrashed();
+  const project = trash.find((item) => item.id === id);
+  if (!project) return;
+  window.localStorage.setItem(
+    KEY,
+    JSON.stringify([project, ...getRecents().filter((item) => item.id !== id)]),
+  );
+  window.localStorage.setItem(
+    TRASH_KEY,
+    JSON.stringify(trash.filter((item) => item.id !== id)),
+  );
 }

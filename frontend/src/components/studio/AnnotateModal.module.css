@@ -1,0 +1,204 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #09090cd9;
+  backdrop-filter: blur(10px);
+}
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(960px, 100%);
+  height: min(760px, calc(100dvh - 48px));
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #ffffff18;
+  border-radius: 10px;
+  background: #202023;
+  color: #ddd5e5;
+  box-shadow: 0 25px 100px #0006;
+  outline: none;
+}
+.header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 49px;
+  min-height: 49px;
+  padding: 0 15px 0 18px;
+  border-bottom: 1px solid #ffffff0c;
+  background: #202023;
+}
+.header > svg {
+  flex-shrink: 0;
+  color: #ae96c4;
+}
+.header h2 {
+  font-size: 12px;
+  font-weight: 500;
+  margin: 0;
+  white-space: nowrap;
+}
+.divider {
+  height: 14px;
+  width: 1px;
+  margin: 0 4px;
+  background: #ffffff14;
+}
+.assetTitle {
+  color: #93869f;
+  font-size: 11px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.close {
+  display: grid;
+  place-items: center;
+  width: 29px;
+  height: 29px;
+  flex-shrink: 0;
+  margin-left: auto;
+  color: #a698b3;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.close:hover {
+  color: #e2d4ef;
+  background: #ffffff06;
+}
+.dialog button:focus-visible,
+.dialog textarea:focus-visible {
+  outline: 2px solid #c1b2f2;
+  outline-offset: 3px;
+}
+.footer {
+  flex-shrink: 0;
+  padding: 14px 16px 16px;
+  border-top: 1px solid #ffffff0b;
+  background: #202023;
+}
+.promptLabel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+  color: #c1b1ce;
+  margin-bottom: 10px;
+}
+.promptLabel span {
+  color: #83768f;
+  font-size: 9px;
+}
+.composer {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  background: #18181b;
+  border: 1px solid #ffffff10;
+  border-radius: 7px;
+  padding: 10px;
+}
+.composer:focus-within {
+  border-color: #c1b2f245;
+}
+.composer textarea {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  max-height: 100px;
+  border: 0;
+  background: transparent;
+  padding: 2px 3px;
+  outline: none !important;
+  color: #d6c9e1;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.composer textarea::placeholder {
+  color: #786d83;
+}
+.apply {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  gap: 7px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #d5c5ef;
+  border-radius: 5px;
+  background: #c6b2eb;
+  color: #30243e;
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+}
+.apply:hover:not(:disabled) {
+  background: #d5c3f0;
+}
+.apply:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+.apply svg:first-child {
+  flex-shrink: 0;
+}
+.spinner {
+  animation: spin 1s linear infinite;
+}
+.error {
+  margin: 10px 0 0;
+  color: #d49cad;
+  font-size: 11px;
+  line-height: 1.7;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (max-width: 600px) {
+  .backdrop {
+    padding: 10px;
+  }
+  .dialog {
+    height: calc(100dvh - 20px);
+    border-radius: 8px;
+  }
+  .header {
+    padding: 0 10px 0 12px;
+  }
+  .footer {
+    padding: 12px;
+  }
+  .promptLabel {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+  .composer {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .composer textarea {
+    flex-basis: 100%;
+  }
+  .apply {
+    margin-left: auto;
+    height: 34px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .backdrop {
+    transition: none;
+  }
+}

@@ -27,75 +27,13 @@ import {
   EMPTY_GRAPH,
   type StudioGraph,
   type Clip,
-  type ClipStatus,
-  type CharN,
-  type SceneN,
-  type GNode,
 } from "./types";
+
+import { buildStudioGraph } from "./studioGraph";
 
 // Poll fairly briskly so the mock's staggered generation (cast -> scenes ->
 // shots) reveals smoothly rather than jumping in coarse batches.
 const POLL_MS = 1200;
-
-// Builds the studio graph from a getCompleteProjectStatus() payload.
-function toGraph(
-  status: any,
-  overview: StudioGraph["overview"]
-): StudioGraph {
-  const rawScenes = (status?.scenes || []) as any[];
-  const rawChars = (status?.characters || []) as any[];
-  const rawFrames = (status?.frames || []) as any[];
-
-  const characters: CharN[] = rawChars.map((c, i) => ({
-    id: c.id || `char-${i}`,
-    name: c.metadata?.name || `Character ${i + 1}`,
-    role: c.metadata?.role || "",
-    media: c.media_url,
-    loading: c.loading === true,
-    meta: c.metadata,
-  }));
-
-  const byScene = new Map<string, Clip[]>();
-  rawFrames.forEach((f, i) => {
-    let s: ClipStatus = "pending";
-    if (f.video_url) s = "completed";
-    else if (f.media_url) s = "generating";
-    const sid = f.scene_id || "unknown";
-    const clip: Clip = {
-      id: f.id || `clip-${i}`,
-      sceneId: sid,
-      order: f.metadata?.frame_order ?? f.metadata?.scene_order ?? i,
-      status: s,
-      video_url: f.video_url,
-      image_url: f.media_url,
-      label: f.metadata?.concise_plot || f.metadata?.summary || `Clip ${i + 1}`,
-      meta: f.metadata,
-    };
-    if (!byScene.has(sid)) byScene.set(sid, []);
-    byScene.get(sid)!.push(clip);
-  });
-  byScene.forEach((arr) => arr.sort((a, b) => a.order - b.order));
-
-  const scenes: SceneN[] = rawScenes
-    .map((s, i) => ({
-      id: s.id || `scene-${i}`,
-      order: s.metadata?.scene_order ?? i + 1,
-      plot: s.metadata?.concise_plot || s.metadata?.detailed_plot || "",
-      media: s.media_url,
-      loading: s.loading === true,
-      clips: byScene.get(s.id) || [],
-      castIds: s.castIds ?? s.metadata?.castIds,
-      meta: s.metadata,
-    }))
-    .sort((a, b) => a.order - b.order);
-
-  const allClips = scenes.flatMap((s) => s.clips);
-  const complete =
-    status?.completion_status === "complete" ||
-    (allClips.length > 0 && allClips.every((c) => c.status === "completed"));
-
-  return { overview, characters, scenes, complete, hasProject: true };
-}
 
 export type StudioActions = {
   sendDirector: (text: string) => Promise<void>;
@@ -178,16 +116,17 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
         }
       }
       setGraph(
-        toGraph(
+        buildStudioGraph(
           status,
           baseOverview ? { ...baseOverview, finalVideoUrl, poster } : null
         )
       );
-    } catch (err) {
+    } catch {
       // Keep a usable overview node even if the pipeline call fails.
       setGraph({
         overview: baseOverview,
         characters: [],
+        objects: [],
         scenes: [],
         complete: false,
         hasProject: !!cur,
@@ -238,7 +177,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
             resp.characters.length > 0
               ? resp.characters
                   .map(
-                    (c: any) => `${c.name} (${c.role}): ${c.description}`
+                    (character) => `${character.name} (${character.role}): ${character.description}`
                   )
                   .join("\n")
               : "";
@@ -263,7 +202,6 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
         mark("director", false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [poll]
   );
 
@@ -409,4 +347,4 @@ export function bust(url: string | undefined, version: number): string | undefin
   return `${url}${sep}v=${version}`;
 }
 
-export type { GNode };
+export type { GNode } from "./types";
