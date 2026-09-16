@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local demo film asset (regenerate with the ffmpeg command in films/tears-of-steel/index.ts)
+public/films/

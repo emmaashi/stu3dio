@@ -11,6 +11,7 @@ import {
   NEW_FILM_CHARACTERS,
   NEW_FILM_SCENES,
   NEW_FILM_SHOT_STILLS,
+  NEW_FILM_SHOT_CLIPS,
   NEW_FILM_SHOT_COUNTS,
   NEW_FILM_TOTAL_SHOTS,
   NEW_FILM_SCENE_COUNT,
@@ -112,6 +113,9 @@ type Frame = {
     veo3_prompt: string;
     dialogue: string;
     duration: number;
+    // The 8-second window this shot plays, kept so every later completion
+    // path renders the shot's own clip instead of the full film.
+    clip_src?: string;
   };
   created_at: string;
   updated_at: string;
@@ -340,7 +344,8 @@ function materializeMockProduction(run: AgentRun) {
   }, 550);
 
   setTimeout(() => {
-    for (const frame of store.frames) frame.video_url = NEW_FILM_CLIP_VIDEO;
+    for (const frame of store.frames)
+      frame.video_url = frame.metadata.clip_src || NEW_FILM_CLIP_VIDEO;
     emitAgent(run.id, "task.progress", { id: "video-batch", label: "Render video clips", phase: "videos", job_type: "video-generation", status: "completed", progress: 100, completed: NEW_FILM_TOTAL_SHOTS, total: NEW_FILM_TOTAL_SHOTS });
     emitAgent(run.id, "activity.completed", { id: "mock-video", label: `${NEW_FILM_TOTAL_SHOTS} clips ready for assembly`, phase: "videos" });
     emitAgent(run.id, "insight.created", { id: uid(), title: "Production ready", metrics: [{ label: "Scenes", value: NEW_FILM_SCENE_COUNT }, { label: "Clips", value: NEW_FILM_TOTAL_SHOTS }, { label: "Runtime", value: `${NEW_FILM_RUNTIME_SECONDS}s` }, { label: "Audio", value: "Generated" }] });
@@ -445,7 +450,11 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
   const fixture = NEW_FILM_SCENES[(scene.metadata.scene_order - 1) % NEW_FILM_SCENES.length];
   const shots = fixture?.shots?.length
     ? fixture.shots
-    : NEW_FILM_SHOT_STILLS.map((still) => ({ still, caption: "" }));
+    : NEW_FILM_SHOT_STILLS.map((still, index) => ({
+        still,
+        caption: "",
+        clip: NEW_FILM_SHOT_CLIPS[index] || NEW_FILM_CLIP_VIDEO,
+      }));
   for (let i = 0; i < count; i++) {
     const id = uid();
     store.shotSeq += 1;
@@ -465,6 +474,7 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
         veo3_prompt: `Cinematic 8s shot: ${scene.metadata.detailed_plot}. ${caption}.`,
         dialogue: "",
         duration: 8,
+        clip_src: shot.clip || NEW_FILM_CLIP_VIDEO,
       },
       created_at: nowISO(),
       updated_at: nowISO(),
@@ -473,7 +483,7 @@ function spawnFramesForScene(store: Store, scene: Scene, count: number) {
     // Auto-generate the clip shortly after so the pipeline reaches completion
     // without manual triggering — staggered per shot so they fill in one by one.
     setTimeout(() => {
-      frame.video_url = NEW_FILM_CLIP_VIDEO;
+      frame.video_url = frame.metadata.clip_src || NEW_FILM_CLIP_VIDEO;
       frame.updated_at = nowISO();
     }, 900 + i * 380 + Math.random() * 250);
   }
@@ -851,7 +861,7 @@ export async function handleMock(
     const job_id = startJob("video-generation", () => {
       const frame = s.frames.find((f) => f.id === frameId);
       if (frame) {
-        frame.video_url = NEW_FILM_CLIP_VIDEO;
+        frame.video_url = frame.metadata.clip_src || NEW_FILM_CLIP_VIDEO;
         frame.updated_at = nowISO();
       }
     });

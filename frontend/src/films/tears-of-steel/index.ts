@@ -17,10 +17,19 @@ import type { BackendCharacter, BackendScene } from "@/data/characterData";
 
 export const DEMO_PROJECT_ID = "demo-emberveil-001";
 
-// Full film (webm) and poster, hotlink-verified on Wikimedia Commons.
-const TOS_VIDEO =
-  "https://upload.wikimedia.org/wikipedia/commons/c/cb/Tears_of_Steel_1080p.webm";
-export const DEMO_FINAL_FILM_SRC = TOS_VIDEO;
+// The film itself is served locally: the Wikimedia original is a ~160MB VP9
+// webm, and every shot preview is a byte-range seek into it, which stalls
+// behind slow range responses, media-blocking extensions, and Safari's missing
+// VP9 support. Echo Hunter never had the problem because its clips are local.
+// Regenerate with:
+//   ffmpeg -i https://upload.wikimedia.org/wikipedia/commons/c/cb/Tears_of_Steel_1080p.webm \
+//     -vf scale=-2:720 -c:v libx264 -crf 24 -preset veryfast -c:a aac -b:a 128k \
+//     -movflags +faststart public/films/tears-of-steel-720p.mp4
+const TOS_VIDEO = "/films/tears-of-steel-720p.mp4";
+// The first ~9s of the source file is the Blender Foundation title card, which
+// is not part of the "generated" film. A clip window skips it and also gives
+// the player the right duration (see parseClipWindow in FilmPlayer).
+export const DEMO_FINAL_FILM_SRC = `${TOS_VIDEO}#t=9,734.167`;
 export const DEMO_POSTER =
   "https://upload.wikimedia.org/wikipedia/commons/thumb/7/70/Tos-poster.png/960px-Tos-poster.png";
 
@@ -71,7 +80,7 @@ const ch = (
   media: string,
   description: string,
   personality: string,
-  backstory: string
+  backstory: string,
 ): BackendCharacter => ({
   id,
   project_id: DEMO_PROJECT_ID,
@@ -194,7 +203,7 @@ const sc = (
   castIds: string[],
   concise: string,
   detailed: string,
-  dialogue: string
+  dialogue: string,
 ): DemoScene => ({
   id,
   project_id: DEMO_PROJECT_ID,
@@ -218,7 +227,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [THOM, CELIA],
     "The bridge, forty years ago",
     "Thom and Celia meet on an Amsterdam canal bridge in spring. When she reaches for him with her new prosthetic hand, he flinches, and something between them breaks for good.",
-    "CELIA: \"It's still me, Thom.\"\nTHOM: \"...I know. I just, I can't.\"",
+    'CELIA: "It\'s still me, Thom."\nTHOM: "...I know. I just, I can\'t."',
   ),
   sc(
     "tos-scene-2",
@@ -227,7 +236,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [THOM, CELIA],
     "The robotic hand",
     "The moment that started everything: Celia offers the cool gleam of her new prosthetic hand, and Thom cannot bring himself to take it. He turns away, and a future of machines is set in motion.",
-    "CELIA: \"It's just a hand.\"\nTHOM: \"It's not the hand. It's that you became this without me.\"",
+    'CELIA: "It\'s just a hand."\nTHOM: "It\'s not the hand. It\'s that you became this without me."',
   ),
   sc(
     "tos-scene-3",
@@ -236,7 +245,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [CELIA, SOLDIER, SENTINEL],
     "Roboticist creates killer robots",
     "Celia pours her grief into her work and becomes the most brilliant roboticist of her age. Decades later the headlines turn dark, and Amsterdam wakes to machines in its skies.",
-    "NEWS (V.O.): \"...the same doctor who revolutionized prosthetics now stands accused as her own machines turn on the city.\"",
+    'NEWS (V.O.): "...the same doctor who revolutionized prosthetics now stands accused as her own machines turn on the city."',
   ),
   sc(
     "tos-scene-4",
@@ -245,7 +254,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [SENTINEL],
     "The cathedral of machines",
     "Inside a ruined cathedral the machines have made their nest, scrap-built sentinels roosting among the organ pipes while drones prowl the drowned streets outside.",
-    "THE CAPTAIN (V.O.): \"They don't sleep. They wait. And they remember every one of us.\"",
+    'THE CAPTAIN (V.O.): "They don\'t sleep. They wait. And they remember every one of us."',
   ),
   sc(
     "tos-scene-5",
@@ -254,7 +263,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [ENGINEER, TECH, SOLDIER, CAPTAIN],
     "The resistance",
     "In an overgrown safehouse on the canals, the last fighters gather: a grizzled captain, a wild-eyed engineer, a frantic technician, and a soldier who has survived too much.",
-    "THE ENGINEER: \"We don't fight the machines. We give them back the one memory that started all this.\"",
+    'THE ENGINEER: "We don\'t fight the machines. We give them back the one memory that started all this."',
   ),
   sc(
     "tos-scene-6",
@@ -263,7 +272,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [OPERATOR, ENGINEER, EFFIGY],
     "The simulation",
     "Before they risk the open city, the operator runs the recreation in simulation, the recovered mind firing across a glowing rig as the effigy takes shape on the bench.",
-    "THE OPERATOR: \"Simulation ready. Loading him in... and he's dreaming.\"",
+    'THE OPERATOR: "Simulation ready. Loading him in... and he\'s dreaming."',
   ),
   sc(
     "tos-scene-7",
@@ -281,7 +290,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [CAPTAIN, ENGINEER, THOM],
     "The field test",
     "Out in the open, under the dead eye of a fallen machine, the captain and engineer wheel the recreation rig into the street for one last test before the bridge.",
-    "THE CAPTAIN: \"If it doesn't hold out here, none of us walk back.\"",
+    'THE CAPTAIN: "If it doesn\'t hold out here, none of us walk back."',
   ),
   sc(
     "tos-scene-9",
@@ -290,7 +299,7 @@ export const DEMO_SCENES: DemoScene[] = [
     [SOLDIER, SENTINEL],
     "Into the fire",
     "As the machines close in, the soldier draws their fire through the burning understructure of the city so the recreation can reach the bridge in time.",
-    "THE SOLDIER: \"Go! I've got their attention, now MOVE!\"",
+    'THE SOLDIER: "Go! I\'ve got their attention, now MOVE!"',
   ),
   sc(
     "tos-scene-10",
@@ -299,13 +308,18 @@ export const DEMO_SCENES: DemoScene[] = [
     [THOM, CELIA, SOLDIER, SENTINEL, CAPTAIN],
     "Tears of steel",
     "The recreated Thom faces the towering machine as old Celia watches her life's regret play out. Amid a mountain of fallen steel, a single moment of acceptance decides everything.",
-    "CELIA: \"This time... let me reach you.\"",
+    'CELIA: "This time... let me reach you."',
   ),
 ];
 
 // Frames/shots per scene: each carries a real frame still (media_url) and the
 // film with a time fragment (video_url) for that beat, so every shot shows real
 // people from the film. All are "completed" so the spine fully stitches.
+//
+// The fragment is a bounded `#t=start,end` window: the source file is the whole
+// 12-minute film, so an open-ended `#t=start` would run a "shot" to the end of
+// the film. FilmPlayer treats the window as the entire clip.
+const SHOT_SECONDS = 8;
 type DemoFrame = {
   id: string;
   scene_id: string;
@@ -322,26 +336,83 @@ type DemoFrame = {
   };
 };
 
-const SHOTS: Array<{ scene: number; still: string; t: number; caption: string }> = [
+const SHOTS: Array<{
+  scene: number;
+  still: string;
+  t: number;
+  caption: string;
+}> = [
   { scene: 1, still: F.bridge, t: 72, caption: "The bridge, forty years ago" },
   { scene: 2, still: TOS_SEEK(520), t: 520, caption: "He pulls away" },
-  { scene: 3, still: F.newspaper, t: 150, caption: "Roboticist creates killer robots" },
-  { scene: 3, still: F.machineCity, t: 165, caption: "Machines fill the Amsterdam sky" },
-  { scene: 3, still: F.robotRoof, t: 180, caption: "A sentinel tears through the rooftops" },
-  { scene: 4, still: TOS_SEEK(490), t: 490, caption: "Inside the cathedral lair" },
-  { scene: 4, still: TOS_SEEK(105), t: 105, caption: "A drone prowls the rooftops" },
+  {
+    scene: 3,
+    still: F.newspaper,
+    t: 150,
+    caption: "Roboticist creates killer robots",
+  },
+  {
+    scene: 3,
+    still: F.machineCity,
+    t: 165,
+    caption: "Machines fill the Amsterdam sky",
+  },
+  {
+    scene: 3,
+    still: F.robotRoof,
+    t: 180,
+    caption: "A sentinel tears through the rooftops",
+  },
+  {
+    scene: 4,
+    still: TOS_SEEK(490),
+    t: 490,
+    caption: "Inside the cathedral lair",
+  },
+  {
+    scene: 4,
+    still: TOS_SEEK(105),
+    t: 105,
+    caption: "A drone prowls the rooftops",
+  },
   { scene: 5, still: F.hideout, t: 210, caption: "The safehouse on the canal" },
   { scene: 5, still: F.team, t: 225, caption: "The resistance makes its plan" },
   { scene: 5, still: F.tech, t: 300, caption: "Wiring the impossible" },
-  { scene: 6, still: TOS_SEEK(62), t: 62, caption: "Reading the recovered mind" },
+  {
+    scene: 6,
+    still: TOS_SEEK(62),
+    t: 62,
+    caption: "Reading the recovered mind",
+  },
   { scene: 6, still: TOS_SEEK(460), t: 460, caption: "Assembling the effigy" },
-  { scene: 7, still: F.brainLab, t: 320, caption: "Rebuilding Thom from memory" },
+  // The workshop wide, not F.brainLab: that frame is The Engineer's portrait,
+  // and t=320 was still back on the bridge.
+  {
+    scene: 7,
+    still: TOS_SEEK(475),
+    t: 475,
+    caption: "Rebuilding Thom from memory",
+  },
   { scene: 8, still: TOS_SEEK(252), t: 252, caption: "The team and the rig" },
   { scene: 8, still: TOS_SEEK(192), t: 192, caption: "Under a fallen machine" },
   { scene: 9, still: F.soldier, t: 380, caption: "Drawing the machines' fire" },
-  { scene: 10, still: F.thomRobot, t: 560, caption: "The past meets the machine" },
-  { scene: 10, still: F.oldCelia, t: 600, caption: "Celia and her fallen steel" },
-  { scene: 10, still: F.junkyard, t: 640, caption: "Among the ruins of the war" },
+  {
+    scene: 10,
+    still: F.thomRobot,
+    t: 560,
+    caption: "The past meets the machine",
+  },
+  {
+    scene: 10,
+    still: F.oldCelia,
+    t: 600,
+    caption: "Celia and her fallen steel",
+  },
+  {
+    scene: 10,
+    still: F.junkyard,
+    t: 640,
+    caption: "Among the ruins of the war",
+  },
 ];
 
 export const DEMO_FRAMES: DemoFrame[] = (() => {
@@ -352,7 +423,7 @@ export const DEMO_FRAMES: DemoFrame[] = (() => {
     return {
       id: `tos-frame-${shot.scene}-${order + 1}`,
       scene_id: `tos-scene-${shot.scene}`,
-      video_url: `${TOS_VIDEO}#t=${shot.t}`,
+      video_url: `${TOS_VIDEO}#t=${shot.t},${shot.t + SHOT_SECONDS}`,
       media_url: shot.still,
       status: "completed",
       metadata: {
@@ -360,7 +431,7 @@ export const DEMO_FRAMES: DemoFrame[] = (() => {
         scene_order: shot.scene,
         concise_plot: shot.caption,
         summary: shot.caption,
-        duration: 8,
+        duration: SHOT_SECONDS,
         dialogue: "",
       },
     };
