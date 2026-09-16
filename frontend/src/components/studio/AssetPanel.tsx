@@ -4,6 +4,7 @@ import {
   ArrowRight,
   FileText,
   Link2,
+  MessagesSquare,
   PencilLine,
   Play,
   Sparkles,
@@ -12,6 +13,7 @@ import {
 import { useStudioStore } from "@/store/useStudioStore";
 import { bust } from "./useStudioPipeline";
 import {
+  isImageEditable,
   resolveAssetSelection,
   resolveSelected,
   type AssetSelection,
@@ -24,6 +26,7 @@ type Props = {
   busy: Record<string, boolean>;
   onRefine?: (text: string) => void;
   onAnnotate?: (asset: AssetSelection) => void;
+  onDiscuss?: (asset: AssetSelection) => void;
 };
 
 export default function AssetPanel({
@@ -32,6 +35,7 @@ export default function AssetPanel({
   busy,
   onRefine,
   onAnnotate,
+  onDiscuss,
 }: Props) {
   const keys = useStudioStore((s) => s.selectedKeys);
   const selectedKey = useStudioStore((s) => s.selectedKey);
@@ -112,7 +116,6 @@ export default function AssetPanel({
       aria-label={`${asset.label} reference`}
     >
       <div className="studio-reference-heading">
-        <span>{asset.kind === "clip" ? "Shot" : asset.kind} reference</span>
         <strong>{asset.label}</strong>
       </div>
       <div className="studio-reference-preview">
@@ -137,7 +140,7 @@ export default function AssetPanel({
         )}
       </div>
       <p className="studio-reference-description">{asset.description}</p>
-      {asset.editable && (
+      {isImageEditable(asset) ? (
         <div className="studio-reference-actions">
           <button
             disabled={!!busy[asset.key]}
@@ -154,6 +157,20 @@ export default function AssetPanel({
             Draw an edit
           </button>
         </div>
+      ) : (
+        // A shot is already rendered footage, so the still-image tools don't
+        // apply: the only way to change it is to talk to the agent about it.
+        detail.kind === "clip" && (
+          <div className="studio-reference-actions">
+            <button
+              disabled={!!busy[asset.key]}
+              onClick={() => onDiscuss?.(asset)}
+            >
+              <MessagesSquare size={13} />
+              New conversation about this shot
+            </button>
+          </div>
+        )
       )}
       <details className="studio-reference-details">
         <summary>Details &amp; story context</summary>

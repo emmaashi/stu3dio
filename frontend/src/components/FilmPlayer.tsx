@@ -5,6 +5,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type KeyboardEvent,
   type CSSProperties,
 } from "react";
@@ -44,6 +45,17 @@ function formatTime(time: number) {
   return `${hours ? `${hours}:${String(minutes).padStart(2, "0")}` : minutes}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
+// A shot is often a window into a longer file (`film.webm#t=150,158`). Without
+// this the player would report the whole film's length and run past the shot.
+// An open-ended `#t=150` is only a start offset, so it is not a clip window.
+function parseClipWindow(src: string | null) {
+  const match = src && /#t=(\d+(?:\.\d+)?),(\d+(?:\.\d+)?)\s*$/.exec(src);
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  return end > start ? { start, end } : null;
+}
+
 export default function FilmPlayer(props: FilmPlayerProps) {
   // A different film starts with fresh playback, error, and buffering state.
   return <Player key={props.src || "empty"} {...props} />;
@@ -67,8 +79,8 @@ function Player({
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downloadController = useRef<AbortController | null>(null);
   const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [rawTime, setRawTime] = useState(0);
+  const [mediaDuration, setMediaDuration] = useState(0);
   const [aspect, setAspect] = useState(16 / 9);
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
@@ -87,6 +99,19 @@ function Player({
   const { rate, setPlaybackRate, cycleRate, allowedRates } =
     usePlaybackRate(initialRate);
   useHls(youtubeEmbed ? null : src, videoRef);
+
+  // Every time/progress figure below is relative to the clip window, so a shot
+  // reads as its own 8 seconds rather than as an offset into the whole film.
+  const clip = useMemo(
+    () => parseClipWindow(youtubeEmbed ? null : src),
+    [src, youtubeEmbed],
+  );
+  const clipStart = clip?.start ?? 0;
+  const clipEnd = Math.min(clip?.end ?? Infinity, mediaDuration || Infinity);
+  const duration = Number.isFinite(clipEnd)
+    ? Math.max(0, clipEnd - clipStart)
+    : mediaDuration;
+  const time = Math.max(0, Math.min(rawTime - clipStart, duration || Infinity));
 
   const revealControls = useCallback(() => {
     setControlsVisible(true);
@@ -153,13 +178,22 @@ function Player({
   const togglePlay = () => {
     const video = videoRef.current;
     if (!video || mediaError) return;
-    if (video.paused) void video.play().catch(() => setPlaying(false));
-    else video.pause();
+    if (!video.paused) {
+      video.pause();
+      return;
+    }
+    // Replay from the top of the clip instead of resuming on its last frame.
+    if (duration && time >= duration - 0.05) {
+      video.currentTime = clipStart;
+      setRawTime(clipStart);
+    }
+    void video.play().catch(() => setPlaying(false));
   };
   const seek = (next: number) => {
     if (!videoRef.current || !duration) return;
-    videoRef.current.currentTime = Math.max(0, Math.min(next, duration));
-    setTime(videoRef.current.currentTime);
+    const target = clipStart + Math.max(0, Math.min(next, duration));
+    videoRef.current.currentTime = target;
+    setRawTime(target);
   };
   const changeVolume = (next: number) => {
     if (!videoRef.current) return;
@@ -199,9 +233,9 @@ function Player({
     if (!video) return;
     setBuffered(
       Array.from({ length: video.buffered.length }, (_, i) => ({
-        start: video.buffered.start(i),
-        end: video.buffered.end(i),
-      })),
+        start: video.buffered.start(i) - clipStart,
+        end: video.buffered.end(i) - clipStart,
+      })).filter((range) => range.end > 0),
     );
   };
   const download = async () => {
@@ -274,8 +308,8 @@ function Player({
       return;
     const actions: Record<string, () => void> = {
       Space: togglePlay,
-      ArrowLeft: () => seek((videoRef.current?.currentTime || 0) - 5),
-      ArrowRight: () => seek((videoRef.current?.currentTime || 0) + 5),
+      ArrowLeft: () => seek(time - 5),
+      ArrowRight: () => seek(time + 5),
       ArrowUp: () => changeVolume(volume + 0.05),
       ArrowDown: () => changeVolume(volume - 0.05),
       KeyM: toggleMute,
@@ -348,7 +382,14 @@ function Player({
               const video = videoRef.current!;
               if (video.videoWidth && video.videoHeight)
                 setAspect(video.videoWidth / video.videoHeight);
-              setDuration(Number.isFinite(video.duration) ? video.duration : 0);
+              setMediaDuration(
+                Number.isFinite(video.duration) ? video.duration : 0,
+              );
+              // Not every browser honours the fragment, so open at the window.
+              if (clip && video.currentTime < clip.start) {
+                video.currentTime = clip.start;
+                setRawTime(clip.start);
+              }
               if (autoplay)
                 void video.play().catch(() => {
                   setPlaying(false);
@@ -356,14 +397,21 @@ function Player({
                 });
             }}
             onDurationChange={() =>
-              setDuration(
+              setMediaDuration(
                 Number.isFinite(videoRef.current?.duration)
                   ? videoRef.current!.duration
                   : 0,
               )
             }
             onTimeUpdate={() => {
-              setTime(videoRef.current?.currentTime || 0);
+              const video = videoRef.current;
+              if (!video) return;
+              // Stop at the end of the window: the file itself runs on.
+              if (clip && video.currentTime >= clip.end) {
+                video.pause();
+                video.currentTime = clip.end;
+              }
+              setRawTime(video.currentTime);
               updateBuffer();
             }}
             onProgress={updateBuffer}

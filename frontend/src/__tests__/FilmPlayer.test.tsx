@@ -25,6 +25,11 @@ describe("FilmPlayer", () => {
     });
   });
   afterEach(() => vi.useRealTimers());
+  const fullLengthFilm = () =>
+    Object.defineProperty(HTMLMediaElement.prototype, "duration", {
+      configurable: true,
+      get: () => 734.167,
+    });
 
   it("plays from the compact controls and removes the center overlay during playback", () => {
     const { container } = render(<FilmPlayer src="test.mp4" />);
@@ -98,6 +103,45 @@ describe("FilmPlayer", () => {
     expect(screen.getByLabelText("Video progress")).toHaveAttribute(
       "aria-valuetext",
       "0:42 of 1:40",
+    );
+  });
+
+  it("treats a #t= window as the whole clip instead of the file it was cut from", () => {
+    // A shot cut from the middle of a 12-minute film.
+    fullLengthFilm();
+    const { container } = render(<FilmPlayer src="film.webm#t=150,158" />);
+    const video = container.querySelector("video")!;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(150);
+    expect(screen.getByLabelText("Video progress")).toHaveAttribute(
+      "aria-valuetext",
+      "0:00 of 0:08",
+    );
+    fireEvent.change(screen.getByLabelText("Video progress"), {
+      target: { value: "4" },
+    });
+    expect(video.currentTime).toBe(154);
+    expect(screen.getByLabelText("Video progress")).toHaveAttribute(
+      "aria-valuetext",
+      "0:04 of 0:08",
+    );
+  });
+
+  it("stops a windowed shot at its end rather than running on into the film", () => {
+    fullLengthFilm();
+    const { container } = render(<FilmPlayer src="film.webm#t=150,158" />);
+    const video = container.querySelector("video")!;
+    fireEvent.loadedMetadata(video);
+    video.currentTime = 156;
+    fireEvent.timeUpdate(video);
+    expect(pause).not.toHaveBeenCalled();
+    video.currentTime = 158.4;
+    fireEvent.timeUpdate(video);
+    expect(pause).toHaveBeenCalledOnce();
+    expect(video.currentTime).toBe(158);
+    expect(screen.getByLabelText("Video progress")).toHaveAttribute(
+      "aria-valuetext",
+      "0:08 of 0:08",
     );
   });
 

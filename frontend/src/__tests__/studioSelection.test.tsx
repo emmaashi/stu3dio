@@ -186,6 +186,35 @@ describe("Studio asset selection", () => {
     expect(screen.queryByText("1024 × 1024")).not.toBeInTheDocument();
   });
 
+  it("offers a shot a conversation instead of the still-image tools", () => {
+    const discuss = vi.fn(),
+      refine = vi.fn();
+    useStudioStore.getState().select("clip-shot-one");
+    render(
+      <AssetPanel
+        graph={graph}
+        version={0}
+        busy={{}}
+        onRefine={refine}
+        onAnnotate={vi.fn()}
+        onDiscuss={discuss}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Refine image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Draw an edit" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "New conversation about this shot" }),
+    );
+    expect(discuss).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "clip-shot-one" }),
+    );
+    expect(refine).not.toHaveBeenCalled();
+  });
+
   it("preserves the story brief draft and reports failed saves", async () => {
     useStudioStore.getState().select("overview");
     render(

@@ -491,7 +491,7 @@
   font-size: 9px;
   color: #827a8e;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-bar {
+.studio-workspace .studio-composer .agent-prompt-bar {
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -501,16 +501,16 @@
 .studio-workspace .agent-prompt-bar:focus-within::after {
   display: none;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-row {
+.studio-workspace .studio-composer .agent-prompt-row {
   padding: 10px 12px 8px;
   grid-template-columns: 27px minmax(0, 1fr) 30px;
   gap: 5px;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-row--plain {
+.studio-workspace .studio-composer .agent-prompt-row--plain {
   grid-template-columns: minmax(0, 1fr) 30px;
   padding-left: 16px;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-row textarea {
+.studio-workspace .studio-composer .agent-prompt-row textarea {
   min-height: 37px;
   padding-top: 5px;
   font-size: 13px;
@@ -518,15 +518,15 @@
   color: #eeeaf4;
   max-height: 140px;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-row textarea::placeholder {
+.studio-workspace .studio-composer .agent-prompt-row textarea::placeholder {
   color: #98909f;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-plus {
+.studio-workspace .studio-composer .agent-prompt-plus {
   border-radius: 6px;
   color: #aaa0b7;
   margin-bottom: 5px;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-send {
+.studio-workspace .studio-composer .agent-prompt-send {
   width: 30px;
   height: 30px;
   border-radius: 7px;
@@ -578,7 +578,7 @@
   box-shadow: inset 0 0 0 1px #ffffff10;
   padding: 3px 4px;
 }
-.studio-workspace .project-prompt-dock .agent-prompt-meta {
+.studio-workspace .studio-composer .agent-prompt-meta {
   padding: 10px 16px 0;
   max-height: 100px;
 }
@@ -1124,6 +1124,12 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
+}
+
+.studio-workspace .agent-rail__composer--hosted {
+  padding: 0;
+  background: transparent;
+  backdrop-filter: none;
 }
 
 /* Keep the canvas in place beneath the story brief dialog. */
