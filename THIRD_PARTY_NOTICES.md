@@ -27,3 +27,19 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Demo media
+
+The two demo films shipped for the offline canvas are third-party works, not
+output of this project.
+
+**Tears of Steel** (2012) — Blender Foundation, licensed
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). Available at
+https://mango.blender.org. The film, its poster and the frame stills used as
+scene and shot thumbnails come from Wikimedia Commons. The local
+`frontend/public/films/tears-of-steel-720p.mp4` asset is a re-encode of that
+original and is not committed to this repository.
+
+**Echo Hunter** — an AI-generated noir short by Kavan the Kid, streamed from
+YouTube for playback. Only cropped frame stills are served locally, from
+`frontend/public/echo-hunter`.
