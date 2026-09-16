@@ -77,6 +77,33 @@ describe("Unified studio conversations", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("hosts the workspace composer once the panel is open", () => {
+    const base = props();
+    const onComposerStateChange = vi.fn();
+    const ref = createRef<AgentRailHandle>();
+    render(
+      <AgentRail
+        {...base}
+        ref={ref}
+        externalComposer
+        composer={<p>The one composer</p>}
+        onComposerStateChange={onComposerStateChange}
+      />,
+    );
+    // Selecting an asset opens the panel, so the composer belongs to it.
+    expect(onComposerStateChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ conversationsOpen: true }),
+    );
+    const footer = document.querySelector(".agent-rail__composer")!;
+    expect(footer).toHaveTextContent("The one composer");
+    expect(footer.className).toContain("agent-rail__composer--hosted");
+    expect(footer.className).not.toContain("--mobile-only");
+    act(() => ref.current?.closeConversations());
+    expect(onComposerStateChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ conversationsOpen: false }),
+    );
+  });
+
   it("can return to a pending proposal after inspecting another asset", () => {
     const base = props();
     const ref = createRef<AgentRailHandle>();

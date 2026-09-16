@@ -44,6 +44,7 @@ import {
   type PromptBarHandle,
 } from "@/components/beautiful-ui/PromptBar";
 import {
+  isImageEditable,
   resolveAssetSelection,
   type AssetSelection,
 } from "@/components/studio/types";
@@ -94,7 +95,11 @@ function StudioWorkspace() {
       disabled: false,
       awaitingApproval: false,
       editingSelection: false,
+      conversationsOpen: false,
     });
+  // One composer, not two: it sits in the centre dock until the conversation
+  // panel opens, then moves into the panel so a thread is a back-and-forth.
+  const composerInRail = agentComposerState.conversationsOpen;
 
   useEffect(() => {
     if (projectId) loadCustomGraph(projectId);
@@ -191,7 +196,8 @@ function StudioWorkspace() {
     const editable = keys
       .map((key) => resolveAssetSelection(graph, key))
       .filter(
-        (asset): asset is AssetSelection => !!asset?.editable && !!asset.media,
+        (asset): asset is AssetSelection =>
+          !!asset && isImageEditable(asset) && !!asset.media,
       );
     await Promise.all(
       editable.map((asset) =>
@@ -220,6 +226,98 @@ function StudioWorkspace() {
   );
 
   if (!projectId) return null;
+
+  const composer = (
+    <div className="studio-composer">
+      <div className="studio-composer-heading">
+        <span>
+          <Sparkles size={14} />
+          {briefOpen
+            ? "Develop your story"
+            : selectedAssets.length
+              ? `Refine ${selectedAssets.length === 1 ? selectedAssets[0].label : `${selectedAssets.length} assets`}`
+              : "Your creative partner"}
+        </span>
+        <div className="studio-composer-actions">
+          {selectedAssets.length > 0 ? (
+            <button onClick={() => select(null)}>
+              Clear selection <X size={12} />
+            </button>
+          ) : (
+            <span className="studio-composer-hint">
+              An idea. An edit. What happens next.
+            </span>
+          )}
+          {!composerInRail && (
+            <button
+              className="studio-hide-prompt"
+              aria-label="Hide prompt bar"
+              aria-expanded={true}
+              aria-controls="studio-prompt-dock"
+              title="Hide prompt bar"
+              onClick={() => {
+                setPromptHidden(true);
+                requestAnimationFrame(() => reopenPromptRef.current?.focus());
+              }}
+            >
+              <ChevronDown size={15} />
+            </button>
+          )}
+        </div>
+      </div>
+      <PromptBar
+        draftKey={`${projectId}:${selectedKeys.length ? [...selectedKeys].sort().join("|") : "film"}`}
+        ref={promptRef}
+        disabled={agentComposerState.disabled || !ready}
+        placeholder={
+          agentComposerState.awaitingApproval
+            ? "Review the proposal in the conversation…"
+            : selectedAssets.length
+              ? "Describe what you’d like to change…"
+              : isNewVideo
+                ? "A film about…"
+                : "Where should the story go next?"
+        }
+        suggestions={[]}
+        contexts={selectedAssets.map((asset) => ({
+          id: asset.key,
+          label: asset.label,
+          media: asset.media,
+          onClear: () => select(asset.key, { additive: true }),
+        }))}
+        contextOptions={contextOptions}
+        allowExtras={!selectedAssets.some(isImageEditable)}
+        onUploadAttachment={(file) =>
+          agentRailRef.current!.uploadAttachment(file)
+        }
+        onSend={(text, attachments) =>
+          agentRailRef.current?.submitPrompt(text, attachments)
+        }
+      />
+      <div className="studio-composer-footer">
+        <span>
+          <Link2 size={11} />
+          {selectedAssets.length
+            ? "Selected assets guide this revision"
+            : "Select cards to refine them together"}
+        </span>
+        {agentComposerState.awaitingApproval ? (
+          <button
+            onClick={() =>
+              agentRailRef.current?.openConversations({ current: true })
+            }
+          >
+            Review proposal <ArrowRight size={12} />
+          </button>
+        ) : (
+          <span>
+            <kbd>↵</kbd> Send <span className="studio-key-separator">·</span>
+            <kbd>⇧ ↵</kbd> New line
+          </span>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -372,7 +470,7 @@ function StudioWorkspace() {
                 Opening your studio…
               </div>
             )}
-            {promptHidden && (
+            {promptHidden && !composerInRail && (
               <button
                 ref={reopenPromptRef}
                 className="studio-reopen-prompt"
@@ -387,109 +485,16 @@ function StudioWorkspace() {
                 <kbd>/</kbd>
               </button>
             )}
-            <div
-              id="studio-prompt-dock"
-              className="project-prompt-dock agent-ui"
-              hidden={promptHidden}
-              aria-label="Creative conversation composer"
-            >
-              <div className="studio-composer-heading">
-                <span>
-                  <Sparkles size={14} />
-                  {briefOpen
-                    ? "Develop your story"
-                    : selectedAssets.length
-                      ? `Refine ${selectedAssets.length === 1 ? selectedAssets[0].label : `${selectedAssets.length} assets`}`
-                      : "Your creative partner"}
-                </span>
-                <div className="studio-composer-actions">
-                  {selectedAssets.length > 0 ? (
-                    <button onClick={() => select(null)}>
-                      Clear selection <X size={12} />
-                    </button>
-                  ) : (
-                    <span className="studio-composer-hint">
-                      An idea. An edit. What happens next.
-                    </span>
-                  )}
-                  <button
-                    className="studio-hide-prompt"
-                    aria-label="Hide prompt bar"
-                    aria-expanded={true}
-                    aria-controls="studio-prompt-dock"
-                    title="Hide prompt bar"
-                    onClick={() => {
-                      setPromptHidden(true);
-                      requestAnimationFrame(() =>
-                        reopenPromptRef.current?.focus(),
-                      );
-                    }}
-                  >
-                    <ChevronDown size={15} />
-                  </button>
-                </div>
+            {!composerInRail && (
+              <div
+                id="studio-prompt-dock"
+                className="project-prompt-dock agent-ui"
+                hidden={promptHidden}
+                aria-label="Creative conversation composer"
+              >
+                {composer}
               </div>
-              <PromptBar
-                draftKey={`${projectId}:${selectedKeys.length ? [...selectedKeys].sort().join("|") : "film"}`}
-                ref={promptRef}
-                disabled={agentComposerState.disabled || !ready}
-                placeholder={
-                  agentComposerState.awaitingApproval
-                    ? "Review the proposal in the conversation…"
-                    : selectedAssets.length
-                      ? "Describe what you’d like to change…"
-                      : isNewVideo
-                        ? "A film about…"
-                        : "Where should the story go next?"
-                }
-                suggestions={
-                  isNewVideo
-                    ? [
-                        "A one-location thriller",
-                        "A surreal sci-fi memory",
-                        "A quiet character drama",
-                      ]
-                    : []
-                }
-                contexts={selectedAssets.map((asset) => ({
-                  id: asset.key,
-                  label: asset.label,
-                  media: asset.media,
-                  onClear: () => select(asset.key, { additive: true }),
-                }))}
-                contextOptions={contextOptions}
-                allowExtras={!selectedAssets.length}
-                onUploadAttachment={(file) =>
-                  agentRailRef.current!.uploadAttachment(file)
-                }
-                onSend={(text, attachments) =>
-                  agentRailRef.current?.submitPrompt(text, attachments)
-                }
-              />
-              <div className="studio-composer-footer">
-                <span>
-                  <Link2 size={11} />
-                  {selectedAssets.length
-                    ? "Selected assets guide this revision"
-                    : "Select cards to refine them together"}
-                </span>
-                {agentComposerState.awaitingApproval ? (
-                  <button
-                    onClick={() =>
-                      agentRailRef.current?.openConversations({ current: true })
-                    }
-                  >
-                    Review proposal <ArrowRight size={12} />
-                  </button>
-                ) : (
-                  <span>
-                    <kbd>↵</kbd> Send{" "}
-                    <span className="studio-key-separator">·</span>
-                    <kbd>⇧ ↵</kbd> New line
-                  </span>
-                )}
-              </div>
-            </div>
+            )}
           </main>
           <AgentRail
             ref={agentRailRef}
@@ -504,6 +509,7 @@ function StudioWorkspace() {
             onComposerStateChange={setAgentComposerState}
             onRefresh={actions.refresh}
             onPlay={(url) => openPlayer(url, title)}
+            composer={composerInRail ? composer : null}
             selectionContent={
               <AssetPanel
                 key={selectedKeys.join("|")}
@@ -516,6 +522,10 @@ function StudioWorkspace() {
                     : draft(text)
                 }
                 onAnnotate={setAnnotation}
+                onDiscuss={() => {
+                  agentRailRef.current?.startNewConversation();
+                  if (window.innerWidth > 900) revealPrompt();
+                }}
               />
             }
           />

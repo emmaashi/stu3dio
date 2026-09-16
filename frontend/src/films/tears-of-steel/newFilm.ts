@@ -18,7 +18,7 @@ import {
 } from "./index";
 
 export const NEW_FILM_PROMPT =
-  "A man is rebuilt from a memory to face the robots his rejection created";
+  "Let's make a live-action sci-fi short. A man is rebuilt from a single memory to face the machines his rejection created \u2014 near-future Amsterdam, rain-slick bridges, practical over spectacle";
 
 export const NEW_FILM_TITLE = DEMO_PROJECT.title;
 
@@ -58,6 +58,9 @@ export const NEW_FILM_CHARACTERS: NewFilmCharacter[] = DEMO_CHARACTERS.map(
 export type NewFilmShot = {
   still: string;
   caption: string;
+  // Each shot is its own 8-second window into the source film, so a shot
+  // preview plays that beat rather than the whole movie.
+  clip: string;
 };
 
 export type NewFilmScene = {
@@ -81,7 +84,13 @@ export const NEW_FILM_SCENES: NewFilmScene[] = DEMO_SCENES.map((source) => {
     .sort((a, b) => a.metadata.frame_order - b.metadata.frame_order)
     .flatMap((frame) =>
       frame.media_url
-        ? [{ still: frame.media_url, caption: frame.metadata.concise_plot }]
+        ? [
+            {
+              still: frame.media_url,
+              caption: frame.metadata.concise_plot,
+              clip: frame.video_url,
+            },
+          ]
         : []
     );
 
@@ -124,9 +133,14 @@ export const NEW_FILM_SCENES_OVERVIEW = `${NEW_FILM_SCENES.length} scenes across
 export const NEW_FILM_DIRECTOR_REPLY =
   "Love it, a machine-age tragedy built on one human flinch. I've shaped it into Tears of Steel: a full arc running from the bridge in Amsterdam, through the rise of the machines and the resistance's impossible plan, to a last confrontation among the wreckage. The plot and cast are sketched below. Hit “Generate the cast” when you're ready and we'll build it stage by stage.";
 
-// Shared pool for any shot a scene-level list doesn't cover.
+// Shared pool for any shot a scene-level list doesn't cover. The clips are in
+// the same order as the stills, so pool entries stay paired.
 export const NEW_FILM_SHOT_STILLS: string[] = DEMO_FRAMES.flatMap((frame) =>
   frame.media_url ? [frame.media_url] : []
+);
+
+export const NEW_FILM_SHOT_CLIPS: string[] = DEMO_FRAMES.flatMap((frame) =>
+  frame.media_url ? [frame.video_url] : []
 );
 
 export function newFilmCharacterByName(

@@ -15,7 +15,11 @@ import { agentApi } from "@/lib/agentApi";
 import { buildAgentBlocks } from "@/lib/agentBlocks";
 import { useAgentRunStore } from "@/store/useAgentRunStore";
 import type { AgentAttachment, AgentRun, AgentRunKind } from "@/types/agent";
-import type { AssetSelection, StudioGraph } from "./types";
+import {
+  isImageEditable,
+  type AssetSelection,
+  type StudioGraph,
+} from "./types";
 import AgentBlockRenderer from "./AgentBlockRenderer";
 import ConversationTranscript from "./ConversationTranscript";
 import { buildContextOptions } from "./studioContext";
@@ -45,6 +49,9 @@ type Props = {
   selectedLabel?: string;
   selectedAssets: AssetSelection[];
   selectionContent: React.ReactNode;
+  // The workspace's main composer, handed over while the panel is open so a
+  // conversation is typed into the thread rather than out on the canvas.
+  composer?: React.ReactNode;
   externalComposer?: boolean;
   onEditSelection: (prompt: string, selectionKeys: string[]) => Promise<number>;
   onSelectAssets?: (selectionKeys: string[]) => void;
@@ -57,11 +64,13 @@ export type AgentRailComposerState = {
   disabled: boolean;
   awaitingApproval: boolean;
   editingSelection: boolean;
+  conversationsOpen: boolean;
 };
 
 export type AgentRailHandle = {
   closeConversations: () => void;
   submitPrompt: (text: string, attachments?: AgentAttachment[]) => void;
+  startNewConversation: () => void;
   draftSelection: (text: string) => void;
   uploadAttachment: (file: File) => Promise<AgentAttachment>;
   openConversations: (options?: {
@@ -85,6 +94,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     selectedLabel,
     selectedAssets,
     selectionContent,
+    composer,
     externalComposer = false,
     onEditSelection,
     onSelectAssets,
@@ -256,6 +266,13 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     run?.status,
     reducedMotion,
   ]);
+
+  const startNewConversation = () => {
+    forceNewConversation.current = true;
+    setSelectedConversationId(null);
+    setHistoryOpen(false);
+    setRailOpen(true);
+  };
 
   const start = async (
     text: string,
@@ -475,11 +492,13 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
       disabled: disabled || submitting || editingSelected,
       awaitingApproval: run?.status === "awaiting_approval",
       editingSelection: editingSelected,
+      conversationsOpen: railOpen,
     });
   }, [
     disabled,
     editingSelected,
     onComposerStateChange,
+    railOpen,
     run?.status,
     submitting,
   ]);
@@ -496,10 +515,11 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     submitPrompt: (text, attachments = []) => {
       const selection = toConversationSelection(selectedAssets);
       setRailOpen(true);
-      if (selectedAssets.some((asset) => asset.editable))
+      if (selectedAssets.some(isImageEditable))
         void submitAssetPrompt(text, selection, false);
       else void start(text, undefined, attachments, false);
     },
+    startNewConversation,
     draftSelection: (text) => {
       conversationPromptRef.current?.setDraft(text);
     },
@@ -546,15 +566,16 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
           aria-hidden={historyOpen || undefined}
         >
           {!!selectedAssets.length && selectionContent}
-          {selectedAssets.length === 1 && selectedAssets[0].editable && (
-            <details className="studio-fine-tune">
-              <summary>Camera &amp; visual direction</summary>
-              <FineTuneCard
-                disabled={disabled || editingSelected}
-                onApply={fineTune}
-              />
-            </details>
-          )}
+          {selectedAssets.length === 1 &&
+            isImageEditable(selectedAssets[0]) && (
+              <details className="studio-fine-tune">
+                <summary>Camera &amp; visual direction</summary>
+                <FineTuneCard
+                  disabled={disabled || editingSelected}
+                  onApply={fineTune}
+                />
+              </details>
+            )}
           <div
             className="studio-conversation-messages"
             aria-label="Conversation messages"
@@ -576,21 +597,18 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
                   onRecommendation={handleRecommendation}
                 />
               ))}
-            {!selectedAssetConversation && !showRun && (
-              <div className="studio-conversation-empty">
-                <MessagesSquare size={18} />
-                <h2>
-                  {selectedAssets.length
-                    ? "What would you like to explore?"
-                    : "Let’s find your next idea."}
-                </h2>
-                <p>
-                  {selectedAssets.length
-                    ? "Try a new look, refine a detail, or describe what should change. Your reference and revisions live here together."
-                    : "Talk through your story, shape your characters, or plan what happens next."}
-                </p>
-              </div>
-            )}
+            {!selectedAssetConversation &&
+              !showRun &&
+              !selectedAssets.length && (
+                <div className="studio-conversation-empty">
+                  <MessagesSquare size={18} />
+                  <h2>Let’s find your next idea.</h2>
+                  <p>
+                    Talk through your story, shape your characters, or plan what
+                    happens next.
+                  </p>
+                </div>
+              )}
             {editingSelected && editStartedAt && (
               <LoadingState
                 label="Applying your revision"
@@ -611,11 +629,13 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
           </div>
         </div>
         <footer
-          className={`agent-rail__composer ${externalComposer ? "agent-rail__composer--mobile-only" : ""}`}
+          className={`agent-rail__composer ${composer ? "agent-rail__composer--hosted" : externalComposer ? "agent-rail__composer--mobile-only" : ""}`}
           inert={historyOpen ? true : undefined}
           aria-hidden={historyOpen || undefined}
         >
-          {run?.status === "awaiting_approval" ? (
+          {composer ? (
+            composer
+          ) : run?.status === "awaiting_approval" ? (
             <div className="agent-approval-lock">
               <button onClick={showCurrentRun}>Review the proposal</button>
               <small>Approve, request changes, or cancel above.</small>
@@ -631,12 +651,12 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
                   : "Where should the story go next?"
               }
               contextOptions={selectedAssets.length ? [] : contextOptions}
-              allowExtras={!selectedAssets.length}
+              allowExtras={!selectedAssets.some(isImageEditable)}
               onUploadAttachment={(file) =>
                 agentApi.uploadAttachment(projectId, file)
               }
               onSend={(text, attachments) =>
-                selectedAssets.some((asset) => asset.editable)
+                selectedAssets.some(isImageEditable)
                   ? void submitAssetPrompt(text, activeAssetSelection)
                   : void start(text, undefined, attachments)
               }

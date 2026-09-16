@@ -276,3 +276,9 @@ export function resolveAssetSelection(
     },
   };
 }
+
+// Characters, scenes and other stills are revised by regenerating their image.
+// Shots render to video, so the image tools (refine / annotate) don't apply to
+// them; they are revised by prompting the agent about the shot instead.
+export const isImageEditable = (asset: AssetSelection): boolean =>
+  asset.editable && asset.kind !== "clip";
