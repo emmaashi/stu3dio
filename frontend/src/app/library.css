@@ -364,6 +364,15 @@
 .library-menu .library-menu-danger {
   color: #c39daa;
 }
+/* Armed state for permanent delete: the second click is the irreversible one. */
+.library-menu .library-menu-confirm {
+  background: #e0607c1f;
+  color: #eda3b5;
+  font-weight: 500;
+}
+.library-menu .library-menu-confirm:hover {
+  background: #e0607c2e;
+}
 .library-spin {
   animation: library-spin 1s linear infinite;
 }

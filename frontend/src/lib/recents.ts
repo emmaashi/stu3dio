@@ -121,6 +121,15 @@ export function trashRecent(id: string): void {
   );
   removeRecent(id);
 }
+// Drop the recoverable copy for good. Nothing else holds a reference to the
+// entry, so it is unrecoverable once this runs.
+export function deleteTrashedForever(id: string): void {
+  if (!isBrowser()) return;
+  window.localStorage.setItem(
+    TRASH_KEY,
+    JSON.stringify(getTrashed().filter((item) => item.id !== id)),
+  );
+}
 export function restoreRecent(id: string): void {
   if (!isBrowser()) return;
   const trash = getTrashed();
