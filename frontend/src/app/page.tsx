@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Search,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { createNewProject } from "@/data/projectData";
@@ -28,6 +29,7 @@ import {
   recordRecent,
   trashRecent,
   restoreRecent,
+  deleteTrashedForever,
   isDemoHidden,
   setDemoHidden,
   type RecentProject,
@@ -96,6 +98,8 @@ export default function Home() {
   const [menu, setMenu] = useState<{ x: number; y: number; card: Card } | null>(
     null,
   );
+  // Permanent delete asks for a second click on the same menu item.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTrigger = useRef<HTMLElement | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -166,6 +170,7 @@ export default function Home() {
   }
   function openMenuAt(x: number, y: number, card: Card, trigger: HTMLElement) {
     menuTrigger.current = trigger;
+    setConfirmDelete(false);
     setMenu({
       x: Math.max(8, Math.min(x, window.innerWidth - 190)),
       y: Math.max(8, Math.min(y, window.innerHeight - 108)),
@@ -190,6 +195,15 @@ export default function Home() {
       setMenu(null);
     } catch {
       setError("Couldn’t restore this film. Please try again.");
+    }
+  }
+  function deleteForever(card: Card) {
+    try {
+      deleteTrashedForever(card.id);
+      refresh();
+      setMenu(null);
+    } catch {
+      setError("Couldn’t delete this film. Please try again.");
     }
   }
   const demos: Card[] = listDemos().map((demo) => ({
@@ -487,10 +501,34 @@ export default function Home() {
                 }}
               >
                 {view === "trash" ? (
-                  <button role="menuitem" onClick={() => restore(menu.card)}>
-                    <RotateCcw size={14} />
-                    Restore film
-                  </button>
+                  <>
+                    <button role="menuitem" onClick={() => restore(menu.card)}>
+                      <RotateCcw size={14} />
+                      Restore film
+                    </button>
+                    {/* Sample films are hidden rather than stored, so there is
+                        nothing to purge — restoring one always brings it back. */}
+                    {!menu.card.demo &&
+                      (confirmDelete ? (
+                        <button
+                          role="menuitem"
+                          className="library-menu-danger library-menu-confirm"
+                          onClick={() => deleteForever(menu.card)}
+                        >
+                          <TriangleAlert size={14} />
+                          Delete forever
+                        </button>
+                      ) : (
+                        <button
+                          role="menuitem"
+                          className="library-menu-danger"
+                          onClick={() => setConfirmDelete(true)}
+                        >
+                          <Trash2 size={14} />
+                          Delete permanently
+                        </button>
+                      ))}
+                  </>
                 ) : (
                   <>
                     <button
