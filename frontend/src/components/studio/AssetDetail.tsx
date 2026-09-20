@@ -164,8 +164,7 @@ export default function AssetDetail({
             disabled={busy || disabled}
             onClick={() => onAnnotate?.(asset)}
           >
-            <PencilLine size={12} />
-            Draw
+            <PencilLine size={14} />
           </button>
         )}
         {busy && (
