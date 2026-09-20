@@ -133,26 +133,13 @@
   transition: background 0.13s;
 }
 .studio-layer-scene-heading:hover {
-  background: #ffffff05;
+  background: #ffffff04;
 }
 .studio-layer-scene-heading.is-selected {
-  background: #bca7ee0d;
-}
-.studio-layer-scene-heading.is-selected::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 7px;
-  bottom: 7px;
-  width: 2px;
-  border-radius: 2px;
-  background: #bca7ee;
+  background: #bca7ee12;
 }
 .studio-layer-scene-heading.is-selected .studio-layer-row {
   color: #e6ddf7;
-}
-.studio-layer-scene-heading.is-selected .studio-scene-number {
-  color: #c3aff0;
 }
 .studio-layer-disclosure {
   width: 18px;
@@ -164,7 +151,6 @@
 }
 .studio-layer-disclosure:hover {
   color: #d1bfdc;
-  background: #ffffff07;
 }
 .studio-layer-disclosure svg,
 .studio-layer-section svg {

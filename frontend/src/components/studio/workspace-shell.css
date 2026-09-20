@@ -80,6 +80,21 @@
   font-weight: 400;
   color: #817d89;
 }
+/* Studio: brand left, film title centred, actions right. */
+.studio-header--centered {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+}
+.studio-header-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+}
+.studio-header--centered .studio-header-actions {
+  justify-self: end;
+}
 .studio-header-divider {
   height: 19px;
   width: 1px;
@@ -105,15 +120,6 @@
 .studio-project-title:hover svg,
 .studio-project-title:focus-visible svg {
   opacity: 1;
-}
-.studio-project-state {
-  font-size: 10px;
-  line-height: 21px;
-  padding: 0 7px;
-  border: 1px solid #ffffff14;
-  border-radius: 5px;
-  color: var(--ink-3);
-  white-space: nowrap;
 }
 .studio-title-input {
   border: 1px solid var(--accent);
@@ -265,10 +271,7 @@ button.studio-run-pill:hover {
   .studio-header-actions {
     gap: 12px;
   }
-  .studio-project-state {
-    display: none;
   }
-}
 @media (max-width: 560px) {
   .studio-run-pill {
     display: none;

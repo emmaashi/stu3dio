@@ -292,37 +292,35 @@ function StudioWorkspace() {
     <MotionConfig reducedMotion="user">
       <div className="studio-workspace">
         <header
-          className="studio-header"
+          className="studio-header studio-header--centered"
           inert={briefOpen ? true : undefined}
           aria-hidden={briefOpen || undefined}
         >
           <WorkspaceBrand onClick={() => router.push("/")} />
-          <span className="studio-header-divider" />
-          {editingTitle ? (
-            <input
-              className="studio-title-input"
-              autoFocus
-              defaultValue={title}
-              aria-label="Film title"
-              onBlur={(e) => void commitTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") e.currentTarget.blur();
-                if (e.key === "Escape") setEditingTitle(false);
-              }}
-            />
-          ) : (
-            <button
-              className="studio-project-title"
-              onClick={() => setEditingTitle(true)}
-              title="Rename film"
-            >
-              {title}
-              <Pencil size={12} />
-            </button>
-          )}
-          <span className="studio-project-state">
-            {isDemo ? "Sample film" : "Workspace"}
-          </span>
+          <div className="studio-header-center">
+            {editingTitle ? (
+              <input
+                className="studio-title-input"
+                autoFocus
+                defaultValue={title}
+                aria-label="Film title"
+                onBlur={(e) => void commitTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+              />
+            ) : (
+              <button
+                className="studio-project-title"
+                onClick={() => setEditingTitle(true)}
+                title="Rename film"
+              >
+                {title}
+                <Pencil size={12} />
+              </button>
+            )}
+          </div>
           <div className="studio-header-actions">
             <button
               className="studio-icon-button studio-history-toggle"
