@@ -42,7 +42,7 @@
   font-size: 14px;
   font-weight: 550;
 }
-.account-identity span {
+.account-identity > div > span {
   color: #a49aae;
   font-size: 12px;
 }
@@ -234,6 +234,16 @@
 }
 .account-submit--quiet:hover:not(:disabled) {
   background: #ffffff10;
+}
+.account-panel > p a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #c3aff0;
+  text-decoration: none;
+}
+.account-panel > p a:hover {
+  text-decoration: underline;
 }
 .account-section {
   padding: 20px 0 24px;
