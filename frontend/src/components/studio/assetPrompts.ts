@@ -7,14 +7,13 @@ export function assetComposerPlaceholder(
   fallback: string,
 ): string {
   if (!assets.length) return fallback;
-  if (assets.length > 1)
-    return `Describe one change for these ${assets.length} assets…`;
+  if (assets.length > 1) return `One change for these ${assets.length} assets…`;
   const [asset] = assets;
   switch (asset.kind) {
     case "character":
-      return `Describe what to change about ${asset.label}…`;
+      return `Describe a change to ${shorten(asset.label)}…`;
     case "scene":
-      return `Describe what to change in ${asset.label}…`;
+      return `Describe a change to ${shorten(asset.label)}…`;
     case "clip":
       return "Ask for changes to this shot…";
     case "film":
@@ -22,6 +21,11 @@ export function assetComposerPlaceholder(
     default:
       return fallback;
   }
+}
+
+/** Keeps a placeholder on one line in the 320px rail. */
+function shorten(label: string, max = 16) {
+  return label.length > max ? `${label.slice(0, max - 1).trimEnd()}…` : label;
 }
 
 export function fineTunePrompt(label: string, values: FineTuneValues): string {

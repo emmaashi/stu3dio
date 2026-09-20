@@ -254,7 +254,7 @@ function StudioWorkspace() {
         tone={agentComposerState.awaitingApproval ? "revision" : "default"}
         placeholder={
           agentComposerState.awaitingApproval
-            ? "What should change? Describe it and send."
+            ? "Describe what should change…"
             : assetComposerPlaceholder(
                 selectedAssets,
                 isNewVideo
