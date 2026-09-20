@@ -18,7 +18,7 @@
   border-radius: 999px;
   background: #ffffff05;
 }
-.account-avatar--large {
+.account-avatar.account-avatar--large {
   width: 44px;
   height: 44px;
   font-size: 15px;
