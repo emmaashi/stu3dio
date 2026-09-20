@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import {
-  ArrowUp,
+  CornerDownLeft,
   AtSign,
   ImagePlus,
   Link2,
@@ -479,7 +479,7 @@ export function PromptBar({
             onClick={submit}
             aria-label="Send prompt"
           >
-            <ArrowUp size={16} strokeWidth={2.4} />
+            <CornerDownLeft size={15} strokeWidth={2.2} />
           </button>
         </div>
       </div>

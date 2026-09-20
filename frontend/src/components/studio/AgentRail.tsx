@@ -700,7 +700,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
               tone={awaitingApproval ? "revision" : "default"}
               placeholder={
                 awaitingApproval
-                  ? "What should change? Describe it and send."
+                  ? "Describe what should change…"
                   : assetComposerPlaceholder(
                       selectedAssets,
                       "Where should the story go next?",
