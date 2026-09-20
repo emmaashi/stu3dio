@@ -228,7 +228,7 @@ function StudioWorkspace() {
 
   const composer = (
     <div className="studio-composer">
-      {boardEmpty && (
+      {ready && boardEmpty && !isDemo && (
         <label className="studio-composer-title">
           <span>Title</span>
           <input
