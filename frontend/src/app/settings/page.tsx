@@ -3,10 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, LoaderCircle } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import WorkspaceBrand from "@/components/studio/WorkspaceBrand";
-import { useAuth } from "@/components/account/useAuth";
-import type { AuthResult } from "@/lib/auth";
+import { CURRENT_USER, initialsFor } from "@/lib/account";
 import {
   ASPECT_OPTIONS,
   RUNTIME_OPTIONS,
@@ -18,43 +17,14 @@ import "../account.css";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const { status, user, updateEmail, updatePassword } = useAuth();
-
-  const [email, setEmail] = useState("");
-  const [emailResult, setEmailResult] = useState<AuthResult | null>(null);
-  const [emailBusy, setEmailBusy] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [nextPassword, setNextPassword] = useState("");
-  const [passwordResult, setPasswordResult] = useState<AuthResult | null>(null);
-  const [passwordBusy, setPasswordBusy] = useState(false);
-
+  const user = CURRENT_USER;
   const [settings, setSettings] = useState<GenerationSettings | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    if (user) setEmail(user.email);
-  }, [user]);
-  useEffect(() => {
     setSettings(getGenerationSettings());
   }, []);
 
-  async function submitEmail(event: FormEvent) {
-    event.preventDefault();
-    setEmailBusy(true);
-    setEmailResult(await updateEmail(email));
-    setEmailBusy(false);
-  }
-  async function submitPassword(event: FormEvent) {
-    event.preventDefault();
-    setPasswordBusy(true);
-    const outcome = await updatePassword(currentPassword, nextPassword);
-    setPasswordResult(outcome);
-    if (outcome.ok) {
-      setCurrentPassword("");
-      setNextPassword("");
-    }
-    setPasswordBusy(false);
-  }
   function submitSettings(event: FormEvent) {
     event.preventDefault();
     if (!settings) return;
@@ -88,116 +58,20 @@ export default function SettingsPage() {
 
           <div className="account-section">
             <h2>Account</h2>
-            {status === "loading" ? (
-              <p>Loading…</p>
-            ) : !user ? (
-              <p>
-                <Link href="/login">Sign in</Link> to manage your email and
-                password.
-              </p>
-            ) : (
-              <>
-                <form className="account-form" onSubmit={submitEmail}>
-                  <div className="account-row">
-                    <label
-                      className="account-field"
-                      data-invalid={
-                        emailResult && !emailResult.ok ? "true" : undefined
-                      }
-                    >
-                      <span>Email</span>
-                      <input
-                        type="email"
-                        autoComplete="email"
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        required
-                      />
-                    </label>
-                    <button
-                      type="submit"
-                      className="account-submit account-submit--quiet"
-                      disabled={emailBusy || email === user.email}
-                    >
-                      {emailBusy && (
-                        <LoaderCircle size={14} className="animate-spin" />
-                      )}
-                      Update email
-                    </button>
-                  </div>
-                  {emailResult && !emailResult.ok && (
-                    <div className="account-error" role="alert">
-                      {emailResult.error}
-                    </div>
-                  )}
-                  {emailResult?.ok && (
-                    <span className="account-success">Email updated.</span>
-                  )}
-                </form>
-                <form
-                  className="account-form"
-                  onSubmit={submitPassword}
-                  style={{ marginTop: 16 }}
-                >
-                  <div className="account-grid">
-                    <label className="account-field">
-                      <span>Current password</span>
-                      <input
-                        type="password"
-                        autoComplete="current-password"
-                        value={currentPassword}
-                        onChange={(event) =>
-                          setCurrentPassword(event.target.value)
-                        }
-                        required
-                      />
-                    </label>
-                    <label
-                      className="account-field"
-                      data-invalid={
-                        passwordResult && !passwordResult.ok
-                          ? "true"
-                          : undefined
-                      }
-                    >
-                      <span>New password</span>
-                      <input
-                        type="password"
-                        autoComplete="new-password"
-                        value={nextPassword}
-                        onChange={(event) =>
-                          setNextPassword(event.target.value)
-                        }
-                        required
-                        minLength={8}
-                      />
-                    </label>
-                  </div>
-                  {passwordResult && !passwordResult.ok && (
-                    <div className="account-error" role="alert">
-                      {passwordResult.error}
-                    </div>
-                  )}
-                  {passwordResult?.ok && (
-                    <span className="account-success">Password updated.</span>
-                  )}
-                  <div>
-                    <button
-                      type="submit"
-                      className="account-submit account-submit--quiet"
-                      disabled={
-                        passwordBusy || !currentPassword || !nextPassword
-                      }
-                    >
-                      {passwordBusy && (
-                        <LoaderCircle size={14} className="animate-spin" />
-                      )}
-                      Update password
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
+            <p>Email and password changes arrive with sign-in.</p>
+            <div className="account-identity">
+              <span
+                className="account-avatar account-avatar--large"
+                aria-hidden="true"
+              >
+                {initialsFor(user)}
+              </span>
+              <div>
+                <strong>{user.name}</strong>
+                <span>@{user.username}</span>
+                <span>{user.email}</span>
+              </div>
+            </div>
           </div>
 
           <form

@@ -1,89 +1,39 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import AccountMenu from "@/components/account/AccountMenu";
-import LoginPage from "@/app/login/page";
-import { createLocalAuthClient } from "@/lib/auth/localAuth";
-import { setAuthClientForTests } from "@/lib/auth";
-import { useAuthStore } from "@/store/useAuthStore";
+import SettingsPage from "@/app/settings/page";
+import { initialsFor } from "@/lib/account";
+import { getGenerationSettings } from "@/lib/settings";
 
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
-describe("accounts UI", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-    push.mockClear();
-    setAuthClientForTests(createLocalAuthClient());
-    useAuthStore.setState({ status: "loading", user: null, mode: "local" });
-  });
-
-  it("shows a Guest pill whose menu offers Sign in when nobody is signed in", async () => {
+describe("account UI (mocked user)", () => {
+  it("shows the signed-in pill with a Settings menu and an inert Sign out", () => {
     render(<AccountMenu />);
-    expect(await screen.findByText("Guest")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
-    expect(screen.getByRole("menuitem", { name: "Sign in" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
-    expect(screen.queryByRole("menuitem", { name: "Sign out" })).toBeNull();
-  });
-
-  it("creates an account from the sign-in page and shows it in the sidebar menu", async () => {
-    render(<LoginPage />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create account", pressed: false }),
-    );
-    fireEvent.change(screen.getByLabelText(/^Email/), {
-      target: { value: "emma@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText(/^Username/), {
-      target: { value: "emma" },
-    });
-    fireEvent.change(screen.getByLabelText(/^Password/), {
-      target: { value: "password1" },
-    });
-    fireEvent.submit(screen.getByLabelText(/^Password/).closest("form")!);
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/"));
-    expect(useAuthStore.getState().user?.username).toBe("emma");
-
-    render(<AccountMenu />);
-    expect(await screen.findByText("emma")).toBeInTheDocument();
+    expect(screen.getByText("Emma Shi")).toBeInTheDocument();
+    expect(screen.getByText("ES")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Account menu" }));
     expect(screen.getByRole("menuitem", { name: "Settings" })).toHaveAttribute(
       "href",
       "/settings",
     );
-    fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
-    await waitFor(() =>
-      expect(useAuthStore.getState().status).toBe("signed-out"),
-    );
-    expect(await screen.findByText("Guest")).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Sign out" })).toBeDisabled();
   });
 
-  it("explains a duplicate email instead of creating a second account", async () => {
-    await createLocalAuthClient().signUp({
-      email: "emma@example.com",
-      username: "emma",
-      password: "password1",
+  it("derives initials from a name or a handle", () => {
+    expect(initialsFor({ name: "Emma Shi", username: "emmashi" })).toBe("ES");
+    expect(initialsFor({ name: "", username: "thom_k" })).toBe("TK");
+  });
+
+  it("saves generation defaults from the settings page", () => {
+    window.localStorage.clear();
+    render(<SettingsPage />);
+    expect(screen.getByText("Emma Shi")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Aspect ratio"), {
+      target: { value: "9:16" },
     });
-    await createLocalAuthClient().signOut();
-    render(<LoginPage />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Create account", pressed: false }),
-    );
-    fireEvent.change(screen.getByLabelText(/^Email/), {
-      target: { value: "emma@example.com" },
-    });
-    fireEvent.change(screen.getByLabelText(/^Username/), {
-      target: { value: "emma2" },
-    });
-    fireEvent.change(screen.getByLabelText(/^Password/), {
-      target: { value: "password1" },
-    });
-    fireEvent.submit(screen.getByLabelText(/^Password/).closest("form")!);
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      /already exists/,
-    );
-    expect(push).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
+    expect(getGenerationSettings().aspectRatio).toBe("9:16");
+    expect(screen.getByText("Saved.")).toBeInTheDocument();
   });
 });
