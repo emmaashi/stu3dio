@@ -9,19 +9,25 @@ import {
   useState,
 } from "react";
 import { useReducedMotion } from "framer-motion";
-import { MessagesSquare, PanelLeft, Square, X } from "lucide-react";
-import type { PromptBarHandle } from "@/components/beautiful-ui/PromptBar";
+import { MessagesSquare, X, SquarePen } from "lucide-react";
 import { agentApi } from "@/lib/agentApi";
 import { buildAgentBlocks } from "@/lib/agentBlocks";
 import { useAgentRunStore } from "@/store/useAgentRunStore";
-import type { AgentAttachment, AgentRun, AgentRunKind } from "@/types/agent";
+import type {
+  AgentAttachment,
+  AgentRun,
+  AgentRunKind,
+  AgentRunPhase,
+} from "@/types/agent";
 import {
   isImageEditable,
   type AssetSelection,
   type StudioGraph,
 } from "./types";
+import { filmPoster } from "./layout";
 import AgentBlockRenderer from "./AgentBlockRenderer";
 import ConversationTranscript from "./ConversationTranscript";
+import { assetComposerPlaceholder } from "./assetPrompts";
 import { buildContextOptions } from "./studioContext";
 import { buildAgentRunContext, resolveAgentRunKind } from "./agentRunRequest";
 import {
@@ -35,11 +41,9 @@ import {
 } from "./assetConversations";
 import {
   ConversationNav,
-  FineTuneCard,
   LoadingState,
   PromptBar,
   type ConversationSummary,
-  type FineTuneValues,
 } from "@/components/beautiful-ui";
 
 type Props = {
@@ -63,6 +67,11 @@ type Props = {
 export type AgentRailComposerState = {
   disabled: boolean;
   awaitingApproval: boolean;
+  /** A run is queued, thinking or running (not paused at an approval). */
+  runActive: boolean;
+  runPhase: AgentRunPhase | null;
+  /** The thread for the current selection already has messages. */
+  threadHasMessages: boolean;
   editingSelection: boolean;
   conversationsOpen: boolean;
 };
@@ -70,14 +79,16 @@ export type AgentRailComposerState = {
 export type AgentRailHandle = {
   closeConversations: () => void;
   submitPrompt: (text: string, attachments?: AgentAttachment[]) => void;
-  startNewConversation: () => void;
-  draftSelection: (text: string) => void;
   uploadAttachment: (file: File) => Promise<AgentAttachment>;
   openConversations: (options?: {
     history?: boolean;
     current?: boolean;
   }) => void;
 };
+
+const RAIL_WIDTH_KEY = "stu3dio.rail.width.v1";
+const RAIL_MIN_WIDTH = 300;
+const RAIL_MAX_WIDTH = 720;
 
 const ACTIVE_STATUSES = new Set<AgentRun["status"]>([
   "queued",
@@ -106,12 +117,48 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
 ) {
   const run = useAgentRunStore((state) => state.run);
   const events = useAgentRunStore((state) => state.events);
-  const connected = useAgentRunStore((state) => state.connected);
   const connectionError = useAgentRunStore((state) => state.connectionError);
   const hydrate = useAgentRunStore((state) => state.hydrate);
   const applyEvent = useAgentRunStore((state) => state.applyEvent);
   const setConnected = useAgentRunStore((state) => state.setConnected);
   const reset = useAgentRunStore((state) => state.reset);
+  // Drag the rail's left edge to resize it; the width survives reloads.
+  const [railWidth, setRailWidth] = useState<number | null>(null);
+  const [resizing, setResizing] = useState(false);
+  useEffect(() => {
+    const stored = Number(window.localStorage.getItem(RAIL_WIDTH_KEY));
+    if (stored >= RAIL_MIN_WIDTH && stored <= RAIL_MAX_WIDTH)
+      setRailWidth(stored);
+  }, []);
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (window.innerWidth <= 900) return;
+    const handle = event.currentTarget;
+    const startX = event.clientX;
+    const startWidth =
+      handle.parentElement?.getBoundingClientRect().width ?? RAIL_MIN_WIDTH;
+    let next = startWidth;
+    handle.setPointerCapture(event.pointerId);
+    setResizing(true);
+    const move = (moveEvent: PointerEvent) => {
+      next = Math.round(
+        Math.min(
+          RAIL_MAX_WIDTH,
+          Math.max(RAIL_MIN_WIDTH, startWidth + (startX - moveEvent.clientX)),
+        ),
+      );
+      setRailWidth(next);
+    };
+    const stop = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", stop);
+      handle.removeEventListener("pointercancel", stop);
+      setResizing(false);
+      window.localStorage.setItem(RAIL_WIDTH_KEY, String(next));
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
+  };
   const [railOpen, setRailOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [selectedConversationId, setSelectedConversationId] = useState<
@@ -125,13 +172,19 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     AssetConversation[]
   >([]);
   const threadRef = useRef<HTMLDivElement>(null);
-  const conversationPromptRef = useRef<PromptBarHandle>(null);
   const previousRunId = useRef<string | null>(null);
   const previousSelection = useRef("");
   const forceNewConversation = useRef(false);
 
   const blocks = useMemo(() => buildAgentBlocks(run, events), [run, events]);
   const disabled = !!run && ACTIVE_STATUSES.has(run.status);
+  const awaitingApproval =
+    run?.status === "awaiting_approval" && !!run.approval;
+  // Edits made inside the approval card, so a revision typed in the composer carries them.
+  const approvalDraft = useRef<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    approvalDraft.current = null;
+  }, [run?.approval?.id]);
   const selectedAssetConversation =
     assetConversations.find(
       (conversation) => conversation.id === selectedConversationId,
@@ -267,13 +320,6 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     reducedMotion,
   ]);
 
-  const startNewConversation = () => {
-    forceNewConversation.current = true;
-    setSelectedConversationId(null);
-    setHistoryOpen(false);
-    setRailOpen(true);
-  };
-
   const start = async (
     text: string,
     forcedKind?: AgentRunKind,
@@ -345,15 +391,16 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     }
   };
 
-  const cancel = async () => {
-    if (!run || submitting) return;
-    setSubmitting(true);
-    try {
-      const snapshot = await agentApi.cancel(run.id);
-      hydrate(snapshot, useAgentRunStore.getState().events);
-    } finally {
-      setSubmitting(false);
-    }
+  const requestChanges = (feedback: string) => {
+    if (!run?.approval) return;
+    setSelectedConversationId("current");
+    setHistoryOpen(false);
+    setRailOpen(true);
+    void resolveApproval(
+      "revise",
+      approvalDraft.current ?? run.approval.values,
+      feedback,
+    );
   };
 
   const commitAssetConversations = (
@@ -467,15 +514,6 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
     }
   };
 
-  const editSelected = (text: string) =>
-    submitAssetPrompt(text, toConversationSelection(selectedAssets));
-
-  const fineTune = (values: FineTuneValues) => {
-    const prompt = `Adjust ${selectedLabel || "the selected asset"}: ${values.framing}, ${values.camera}, style intensity ${values.style}, prompt emphasis ${values.emphasis}.`;
-    if (selectedAssets.length) void editSelected(prompt);
-    else void start(prompt, "enhance");
-  };
-
   const handleRecommendation = (id: string) => {
     if (id === "retry-run" && run) {
       void start(run.prompt, run.kind);
@@ -489,13 +527,21 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
 
   useEffect(() => {
     onComposerStateChange?.({
-      disabled: disabled || submitting || editingSelected,
-      awaitingApproval: run?.status === "awaiting_approval",
+      disabled:
+        (disabled && !awaitingApproval) || submitting || editingSelected,
+      awaitingApproval,
+      runActive:
+        !!run && ["queued", "thinking", "running"].includes(run.status),
+      runPhase: run?.phase ?? null,
+      threadHasMessages: (selectedAssetConversation?.messages.length ?? 0) > 0,
       editingSelection: editingSelected,
       conversationsOpen: railOpen,
     });
   }, [
+    awaitingApproval,
     disabled,
+    run,
+    selectedAssetConversation,
     editingSelected,
     onComposerStateChange,
     railOpen,
@@ -513,15 +559,12 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
   useImperativeHandle(ref, () => ({
     closeConversations: () => setRailOpen(false),
     submitPrompt: (text, attachments = []) => {
+      if (awaitingApproval) return requestChanges(text);
       const selection = toConversationSelection(selectedAssets);
       setRailOpen(true);
       if (selectedAssets.some(isImageEditable))
         void submitAssetPrompt(text, selection, false);
       else void start(text, undefined, attachments, false);
-    },
-    startNewConversation,
-    draftSelection: (text) => {
-      conversationPromptRef.current?.setDraft(text);
     },
     uploadAttachment: (file) => agentApi.uploadAttachment(projectId, file),
     openConversations: (options) => {
@@ -533,22 +576,44 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
 
   return (
     <aside
-      className={`agent-ui agent-rail studio-conversations ${railOpen ? "is-open" : "is-closed"}`}
+      className={`agent-ui agent-rail studio-conversations ${railOpen ? "is-open" : "is-closed"} ${resizing ? "is-resizing" : ""}`}
       aria-label="Conversations"
       aria-hidden={!railOpen}
       inert={!railOpen ? true : undefined}
+      style={
+        railWidth
+          ? ({ "--rail-width": `${railWidth}px` } as React.CSSProperties)
+          : undefined
+      }
     >
+      <div
+        className="agent-rail__resizer"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize conversations"
+        title="Drag to resize"
+        onPointerDown={startResize}
+        onDoubleClick={() => {
+          setRailWidth(null);
+          window.localStorage.removeItem(RAIL_WIDTH_KEY);
+        }}
+      />
       <header className="agent-rail__header studio-conversation-header">
         <MessagesSquare size={15} />
         <span>Conversations</span>
         <button
           className="agent-icon-button"
-          onClick={() => setHistoryOpen((open) => !open)}
-          aria-label="Conversation history"
-          aria-expanded={historyOpen}
-          title={historyOpen ? "Back to conversation" : "View history"}
+          aria-label="New conversation"
+          title="New conversation"
+          disabled={disabled || submitting || editingSelected}
+          onClick={() => {
+            forceNewConversation.current = true;
+            setSelectedConversationId(null);
+            setHistoryOpen(false);
+            onSelectAssets?.([]);
+          }}
         >
-          <PanelLeft size={15} />
+          <SquarePen size={15} />
         </button>
         <button
           className="agent-icon-button"
@@ -565,17 +630,14 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
           inert={historyOpen ? true : undefined}
           aria-hidden={historyOpen || undefined}
         >
-          {!!selectedAssets.length && selectionContent}
-          {selectedAssets.length === 1 &&
-            isImageEditable(selectedAssets[0]) && (
-              <details className="studio-fine-tune">
-                <summary>Camera &amp; visual direction</summary>
-                <FineTuneCard
-                  disabled={disabled || editingSelected}
-                  onApply={fineTune}
-                />
-              </details>
-            )}
+          {/* Once a multi-asset thread has messages the composer pills carry
+              the references, so the "N assets selected" list steps aside. */}
+          {!!selectedAssets.length &&
+            !(
+              selectedAssets.length > 1 &&
+              (selectedAssetConversation?.messages.length ?? 0) > 0
+            ) &&
+            selectionContent}
           <div
             className="studio-conversation-messages"
             aria-label="Conversation messages"
@@ -583,6 +645,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
             {selectedAssetConversation && (
               <ConversationTranscript
                 conversation={selectedAssetConversation}
+                showHeader={!selectedAssets.length}
               />
             )}
             {!selectedAssetConversation &&
@@ -593,22 +656,15 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
                   block={block}
                   busy={submitting}
                   onApproval={resolveApproval}
+                  onApprovalValuesChange={(values) => {
+                    approvalDraft.current = values;
+                  }}
                   onPlay={onPlay}
+                  filmTitle={graph.overview?.title}
+                  filmPoster={filmPoster(graph)}
                   onRecommendation={handleRecommendation}
                 />
               ))}
-            {!selectedAssetConversation &&
-              !showRun &&
-              !selectedAssets.length && (
-                <div className="studio-conversation-empty">
-                  <MessagesSquare size={18} />
-                  <h2>Let’s find your next idea.</h2>
-                  <p>
-                    Talk through your story, shape your characters, or plan what
-                    happens next.
-                  </p>
-                </div>
-              )}
             {editingSelected && editStartedAt && (
               <LoadingState
                 label="Applying your revision"
@@ -635,67 +691,44 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
         >
           {composer ? (
             composer
-          ) : run?.status === "awaiting_approval" ? (
-            <div className="agent-approval-lock">
-              <button onClick={showCurrentRun}>Review the proposal</button>
-              <small>Approve, request changes, or cancel above.</small>
-            </div>
           ) : (
             <PromptBar
-              ref={conversationPromptRef}
               draftKey={selectionSignature || "film"}
-              disabled={disabled || submitting || editingSelected}
+              disabled={
+                (disabled && !awaitingApproval) || submitting || editingSelected
+              }
+              tone={awaitingApproval ? "revision" : "default"}
               placeholder={
-                selectedAssets.length
-                  ? `Continue with ${selectedAssets.length === 1 ? selectedAssets[0].label : `${selectedAssets.length} assets`}…`
-                  : "Where should the story go next?"
+                awaitingApproval
+                  ? "What should change? Describe it and send."
+                  : assetComposerPlaceholder(
+                      selectedAssets,
+                      "Where should the story go next?",
+                    )
               }
               contextOptions={selectedAssets.length ? [] : contextOptions}
-              allowExtras={!selectedAssets.some(isImageEditable)}
+              allowExtras={
+                !awaitingApproval && !selectedAssets.some(isImageEditable)
+              }
               onUploadAttachment={(file) =>
                 agentApi.uploadAttachment(projectId, file)
               }
               onSend={(text, attachments) =>
-                selectedAssets.some(isImageEditable)
-                  ? void submitAssetPrompt(text, activeAssetSelection)
-                  : void start(text, undefined, attachments)
+                awaitingApproval
+                  ? requestChanges(text)
+                  : selectedAssets.some(isImageEditable)
+                    ? void submitAssetPrompt(text, activeAssetSelection)
+                    : void start(text, undefined, attachments)
               }
             />
           )}
         </footer>
-        {run && ACTIVE_STATUSES.has(run.status) && (
-          <div
-            className="studio-conversation-status"
-            inert={historyOpen ? true : undefined}
-            aria-hidden={historyOpen || undefined}
-          >
-            <span>
-              {run.status === "awaiting_approval"
-                ? "Waiting for your review"
-                : connected
-                  ? "Working on your film…"
-                  : "Connecting…"}
-            </span>
-            {run.status !== "awaiting_approval" && (
-              <button onClick={cancel} disabled={submitting}>
-                <Square size={9} />
-                Stop
-              </button>
-            )}
-          </div>
-        )}
         <ConversationNav
           embedded
           open={historyOpen}
           activeId={selectedConversationId || undefined}
           conversations={conversations}
-          newConversationDisabled={disabled || submitting || editingSelected}
           onClose={() => setHistoryOpen(false)}
-          onNewConversation={() => {
-            forceNewConversation.current = true;
-            setSelectedConversationId(null);
-            setHistoryOpen(false);
-          }}
           onSelect={(id) => {
             forceNewConversation.current = false;
             const conversation = assetConversations.find(

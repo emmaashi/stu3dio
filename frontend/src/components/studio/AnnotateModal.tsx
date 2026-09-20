@@ -152,14 +152,6 @@ export default function AnnotateModal({
           disabled={locked}
         />
         <footer className={styles.footer}>
-          <label className={styles.promptLabel} htmlFor="annotation-prompt">
-            Describe the change
-            <span>
-              {hasDrawing
-                ? "Your drawing will be included"
-                : "Draw on the image, describe a change, or use both"}
-            </span>
-          </label>
           <div className={styles.composer}>
             <textarea
               id="annotation-prompt"
@@ -167,7 +159,11 @@ export default function AnnotateModal({
               value={prompt}
               disabled={locked}
               rows={2}
-              placeholder="Describe what should change…"
+              placeholder={
+                hasDrawing
+                  ? "Describe the change (your drawing is included)…"
+                  : "Draw on the image or describe what should change…"
+              }
               onChange={(event) => setPrompt(event.target.value)}
             />
             <button
@@ -180,7 +176,7 @@ export default function AnnotateModal({
               ) : (
                 <Sparkles size={14} />
               )}
-              <span>{locked ? "Applying…" : "Apply edit"}</span>
+              <span>{locked ? "Applying…" : "Apply"}</span>
             </button>
           </div>
           {error && (

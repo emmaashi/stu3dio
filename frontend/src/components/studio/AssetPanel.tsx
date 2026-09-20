@@ -1,19 +1,11 @@
 "use client";
 
-import {
-  ArrowRight,
-  FileText,
-  Link2,
-  MessagesSquare,
-  PencilLine,
-  Play,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { FileText, X } from "lucide-react";
+import type { FineTuneValues } from "@/components/beautiful-ui";
 import { useStudioStore } from "@/store/useStudioStore";
 import { bust } from "./useStudioPipeline";
+import AssetDetail from "./AssetDetail";
 import {
-  isImageEditable,
   resolveAssetSelection,
   resolveSelected,
   type AssetSelection,
@@ -24,24 +16,23 @@ type Props = {
   graph: StudioGraph;
   version: number;
   busy: Record<string, boolean>;
-  onRefine?: (text: string) => void;
+  disabled?: boolean;
   onAnnotate?: (asset: AssetSelection) => void;
-  onDiscuss?: (asset: AssetSelection) => void;
+  onFineTune?: (asset: AssetSelection, values: FineTuneValues) => void;
 };
 
+/** Routes the current selection to the right reference view. */
 export default function AssetPanel({
   graph,
   version,
   busy,
-  onRefine,
+  disabled,
   onAnnotate,
-  onDiscuss,
+  onFineTune,
 }: Props) {
   const keys = useStudioStore((s) => s.selectedKeys);
   const selectedKey = useStudioStore((s) => s.selectedKey);
   const select = useStudioStore((s) => s.select);
-  const focus = useStudioStore((s) => s.focus);
-  const openPlayer = useStudioStore((s) => s.openPlayer);
   const assets = keys
     .map((key) => resolveAssetSelection(graph, key))
     .filter((asset): asset is AssetSelection => !!asset);
@@ -79,143 +70,20 @@ export default function AssetPanel({
       <div className="studio-brief-reference">
         <FileText size={15} />
         <span>
-          Working from your story brief<small>{graph.overview?.title}</small>
+          Working from your overview<small>{graph.overview?.title}</small>
         </span>
       </div>
     );
-  const video =
-    detail.kind === "clip"
-      ? detail.clip.video_url
-      : detail.kind === "film"
-        ? detail.overview?.finalVideoUrl
-        : undefined;
-  const scene =
-    detail.kind === "scene"
-      ? detail.scene
-      : detail.kind === "clip"
-        ? detail.scene
-        : undefined;
-  const fields =
-    detail.kind === "character"
-      ? [
-          ["Role", detail.character.role],
-          ["Personality", detail.character.meta?.personality],
-          ["Backstory", detail.character.meta?.backstory],
-        ]
-      : detail.kind === "clip"
-        ? [
-            ["Dialogue", detail.clip.meta?.dialogue],
-            ["Shot direction", detail.clip.meta?.veo3_prompt],
-          ]
-        : detail.kind === "scene"
-          ? [["Dialogue", detail.scene.meta?.dialogue]]
-          : [];
   return (
-    <section
-      className="studio-conversation-reference"
-      aria-label={`${asset.label} reference`}
-    >
-      <div className="studio-reference-heading">
-        <strong>{asset.label}</strong>
-      </div>
-      <div className="studio-reference-preview">
-        {asset.media ? (
-          <img src={bust(asset.media, version)} alt={asset.label} />
-        ) : video ? (
-          <video src={video} controls playsInline />
-        ) : null}
-        {video && (
-          <button
-            className="studio-reference-play"
-            aria-label={`Play ${asset.label}`}
-            onClick={() => openPlayer(video, asset.label)}
-          >
-            <Play size={16} />
-          </button>
-        )}
-        {busy[asset.key] && (
-          <span className="studio-reference-busy" role="status">
-            Updating reference…
-          </span>
-        )}
-      </div>
-      <p className="studio-reference-description">{asset.description}</p>
-      {isImageEditable(asset) ? (
-        <div className="studio-reference-actions">
-          <button
-            disabled={!!busy[asset.key]}
-            onClick={() => onRefine?.(`Refine ${asset.label}: `)}
-          >
-            <Sparkles size={13} />
-            Refine image
-          </button>
-          <button
-            disabled={!!busy[asset.key]}
-            onClick={() => onAnnotate?.(asset)}
-          >
-            <PencilLine size={13} />
-            Draw an edit
-          </button>
-        </div>
-      ) : (
-        // A shot is already rendered footage, so the still-image tools don't
-        // apply: the only way to change it is to talk to the agent about it.
-        detail.kind === "clip" && (
-          <div className="studio-reference-actions">
-            <button
-              disabled={!!busy[asset.key]}
-              onClick={() => onDiscuss?.(asset)}
-            >
-              <MessagesSquare size={13} />
-              New conversation about this shot
-            </button>
-          </div>
-        )
-      )}
-      <details className="studio-reference-details">
-        <summary>Details &amp; story context</summary>
-        <p>{asset.description}</p>
-        {fields
-          .filter(([, value]) => value)
-          .map(([label, value]) => (
-            <div className="studio-reference-field" key={label}>
-              <span>{label}</span>
-              <p>{value}</p>
-            </div>
-          ))}
-        <div className="studio-context-panel">
-          <button onClick={() => select("overview")}>
-            <FileText size={14} />
-            <span>
-              Story brief<small>{graph.overview?.title}</small>
-            </span>
-            <ArrowRight size={13} />
-          </button>
-          {detail.kind === "clip" && scene && (
-            <button onClick={() => focus(`scene-${scene.id}`)}>
-              <Link2 size={14} />
-              <span>
-                Scene {scene.order}
-                <small>{scene.plot}</small>
-              </span>
-              <ArrowRight size={13} />
-            </button>
-          )}
-          {graph.characters
-            .filter((c) => scene?.castIds?.includes(c.id))
-            .map((c) => (
-              <button key={c.id} onClick={() => focus(`char-${c.id}`)}>
-                {c.media && <img src={c.media} alt="" />}
-                <span>
-                  {c.name}
-                  <small>Character reference</small>
-                </span>
-                <ArrowRight size={13} />
-              </button>
-            ))}
-          <p className="studio-reference-usage">{asset.usage}</p>
-        </div>
-      </details>
-    </section>
+    <AssetDetail
+      graph={graph}
+      detail={detail}
+      asset={asset}
+      version={version}
+      busy={!!busy[asset.key]}
+      disabled={disabled}
+      onAnnotate={onAnnotate}
+      onFineTune={onFineTune}
+    />
   );
 }

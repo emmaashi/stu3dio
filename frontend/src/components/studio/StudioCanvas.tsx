@@ -117,7 +117,35 @@ function PipelineNode({ id, data }: NodeProps<PipelineRFNode>) {
   const select = useStudioStore((state) => state.select);
   const openPlayer = useStudioStore((state) => state.openPlayer);
   const typeLabel =
-    n.kind === "clip" ? "Shot" : n.kind === "overview" ? "Story brief" : n.kind;
+    n.kind === "clip" ? "Shot" : n.kind === "overview" ? "Overview" : n.kind;
+
+  if (n.skeleton) {
+    return (
+      <div
+        className={`cv-node kind-${n.kind}${n.spine ? " spine" : ""} skeleton`}
+        style={{ position: "relative", width: n.w, height: n.h }}
+        aria-hidden
+      >
+        <NodeHandles />
+        <div className="cv-node-media">
+          <div className="cv-skeleton-media" />
+        </div>
+        <div className="cv-card-kind">
+          <Icon name={KIND_ICON[n.kind]} size={11} />
+          <span>{typeLabel}</span>
+        </div>
+        <div className="cv-card-caption">
+          <div className="cv-card-title-row">
+            <span className="cv-node-title">{n.title}</span>
+            <span className="cv-card-status">
+              {n.kind === "film" ? "Assembling" : "Queued"}
+            </span>
+          </div>
+          {n.label ? <p>{n.label}</p> : <span className="cv-skeleton-line" />}
+        </div>
+      </div>
+    );
+  }
   const status =
     busy || n.loading
       ? "Working"
@@ -148,7 +176,12 @@ function PipelineNode({ id, data }: NodeProps<PipelineRFNode>) {
       <NodeHandles />
       <div className="cv-node-media">
         {mediaSrc ? (
-          <img src={mediaSrc} alt={n.title} draggable={false} />
+          <img
+            src={mediaSrc}
+            alt={n.title}
+            draggable={false}
+            onLoad={(event) => event.currentTarget.classList.add("is-loaded")}
+          />
         ) : n.video ? (
           <video
             src={n.video}
@@ -321,7 +354,6 @@ function CanvasInner({
   innerRef,
 }: Props & { innerRef: React.Ref<StudioCanvasHandle> }) {
   const select = useStudioStore((s) => s.select);
-  const openFinalize = useStudioStore((s) => s.openFinalize);
   const focusKey = useStudioStore((s) => s.focusKey);
   const focusNonce = useStudioStore((s) => s.focusNonce);
 
@@ -382,6 +414,7 @@ function CanvasInner({
         draggable: false,
         deletable: false,
         focusable: false,
+        selectable: !n.skeleton,
         style: { width: n.w, height: n.h },
       });
     });
@@ -410,6 +443,7 @@ function CanvasInner({
       animated: false,
       selectable: false,
       deletable: false,
+      className: e.flow ? "is-flowing" : undefined,
       style: {
         stroke:
           selectedKeys.includes(e.source) || selectedKeys.includes(e.target)
@@ -452,14 +486,30 @@ function CanvasInner({
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
-  useEffect(() => setNodes(rfNodes), [rfNodes, setNodes]);
+  // Carry measured sizes across re-syncs: React Flow hides an edge until both
+  // ends are measured, so fresh node objects every poll would blink the edges.
+  useEffect(
+    () =>
+      setNodes((previous) => {
+        const measured = new Map(previous.map((n) => [n.id, n.measured]));
+        return rfNodes.map((n) => {
+          const size = measured.get(n.id);
+          return size ? { ...n, measured: size } : n;
+        });
+      }),
+    [rfNodes, setNodes],
+  );
   useEffect(() => setEdges(rfEdges), [rfEdges, setEdges]);
 
   // Auto-frame the timeline: a smooth entrance once the nodes are measured, then
-  // reframes as new nodes stream in — until the user takes manual control.
+  // reframes as new nodes stream in so the whole board stays in view while it
+  // generates. A manual pan or zoom only pauses that briefly, so someone who
+  // leaned in to inspect a card is not yanked back out, but the next burst of
+  // cards still gets framed once they have settled.
+  const AUTO_FIT_IDLE_MS = 2500;
   const nodesInitialized = useNodesInitialized();
   const [revealed, setRevealed] = useState(false);
-  const interacted = useRef(false);
+  const lastInteraction = useRef(0);
   const programmatic = useRef(false);
   const entered = useRef(false);
   const prevCount = useRef(-1);
@@ -484,7 +534,7 @@ function CanvasInner({
       programmatic.current = false;
       return;
     }
-    interacted.current = true;
+    lastInteraction.current = Date.now();
   }, []);
 
   useEffect(() => {
@@ -513,11 +563,23 @@ function CanvasInner({
         maxZoom: 1,
       });
       const id = requestAnimationFrame(() => setRevealed(true));
-      return () => cancelAnimationFrame(id);
+      // A board that is still generating (skeleton cards present) arrives at its
+      // full size at once, so ease out to frame all of it right after the reveal.
+      const generating = layout.nodes.some((n) => n.skeleton);
+      const zoomOut = generating
+        ? window.setTimeout(() => {
+            if (Date.now() - lastInteraction.current > AUTO_FIT_IDLE_MS)
+              fit(650);
+          }, 450)
+        : 0;
+      return () => {
+        cancelAnimationFrame(id);
+        if (zoomOut) window.clearTimeout(zoomOut);
+      };
     }
     if (count !== prevCount.current) {
       prevCount.current = count;
-      if (!interacted.current) fit(440);
+      if (Date.now() - lastInteraction.current > AUTO_FIT_IDLE_MS) fit(440);
     }
   }, [nodesInitialized, layout.nodes, fit, rf]);
 
@@ -533,7 +595,7 @@ function CanvasInner({
     innerRef,
     () => ({
       fit: () => {
-        interacted.current = false;
+        lastInteraction.current = 0;
         fit();
       },
     }),
@@ -544,7 +606,7 @@ function CanvasInner({
   useEffect(() => {
     if (!focusKey) return;
     if (!rf.getNode(focusKey)) return;
-    interacted.current = true;
+    lastInteraction.current = Date.now();
     // Let the conversation panel and React Flow's ResizeObserver settle first.
     // Otherwise fitting uses the previous canvas width and shifts the card aside.
     let frame = requestAnimationFrame(() => {
@@ -588,6 +650,7 @@ function CanvasInner({
     (event: React.MouseEvent, node: Node) => {
       if (node.type !== "pipeline") return;
       const n = (node.data as PipelineData).gnode;
+      if (n.skeleton) return;
       select(n.key, { additive: event.shiftKey });
     },
     [select],
@@ -597,13 +660,10 @@ function CanvasInner({
     (_e: React.MouseEvent, node: Node) => {
       if (node.type !== "pipeline") return;
       const n = (node.data as PipelineData).gnode;
-      if (n.kind === "clip" && n.video) onPlayFilm(n.video, n.label || n.title);
-      if (n.kind === "film") {
-        if (n.video) onPlayFilm(n.video, n.title);
-        else openFinalize();
-      }
+      if ((n.kind === "clip" || n.kind === "film") && n.video)
+        onPlayFilm(n.video, n.kind === "film" ? n.title : n.label || n.title);
     },
-    [onPlayFilm, openFinalize],
+    [onPlayFilm],
   );
 
   const onPaneClick = useCallback(() => select(null), [select]);
@@ -616,7 +676,7 @@ function CanvasInner({
       y: bounds.top + bounds.height / 2,
     });
     addNote("idea", { x: position.x - 130, y: position.y - 105 });
-    interacted.current = true;
+    lastInteraction.current = Date.now();
   };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -673,21 +733,29 @@ function CanvasInner({
         zoomOnPinch
         zoomOnDoubleClick={false}
         selectionOnDrag={tool === "select"}
-        onSelectionEnd={() =>
-          useStudioStore.getState().setSelection(
-            rf
-              .getNodes()
-              .filter((node) => node.type === "pipeline" && node.selected)
-              .map((node) => node.id),
-          )
-        }
+        // Shift adds to the selection (matching onNodeClick) instead of being
+        // React Flow's rubber-band key, so a shift-click can never turn into a
+        // one-node box selection that wipes what was already picked.
+        multiSelectionKeyCode="Shift"
+        selectionKeyCode={null}
+        onSelectionEnd={(event) => {
+          const boxed = rf
+            .getNodes()
+            .filter((node) => node.type === "pipeline" && node.selected)
+            .map((node) => node.id);
+          if (!boxed.length) return;
+          const store = useStudioStore.getState();
+          store.setSelection(
+            event.shiftKey ? [...store.selectedKeys, ...boxed] : boxed,
+          );
+        }}
         deleteKeyCode={["Backspace", "Delete"]}
       >
         <Background
           variant={BackgroundVariant.Dots}
           gap={24}
-          size={1}
-          color="rgba(214,207,228,0.12)"
+          size={1.3}
+          color="rgba(214,207,228,0.16)"
         />
       </ReactFlow>
 

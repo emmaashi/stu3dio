@@ -12,17 +12,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { AnimatePresence, motion, MotionConfig } from "framer-motion";
 import {
   ArrowUpRight,
-  ArrowRight,
-  ChevronDown,
-  SquarePen,
   Layers2,
-  Link2,
   MessagesSquare,
   PanelLeftClose,
   Pencil,
-  Play,
-  Sparkles,
-  X,
 } from "lucide-react";
 import { useStudioStore } from "@/store/useStudioStore";
 import { useCustomGraphStore } from "@/store/useCustomGraphStore";
@@ -39,6 +32,11 @@ import AgentRail, {
   type AgentRailComposerState,
   type AgentRailHandle,
 } from "@/components/studio/AgentRail";
+import { resolveFilmAction } from "@/components/studio/filmAction";
+import {
+  assetComposerPlaceholder,
+  fineTunePrompt,
+} from "@/components/studio/assetPrompts";
 import {
   PromptBar,
   type PromptBarHandle,
@@ -82,10 +80,7 @@ function StudioWorkspace() {
   const loadCustomGraph = useCustomGraphStore((s) => s.load);
   const [editingTitle, setEditingTitle] = useState(false);
   const [layersOpen, setLayersOpen] = useState(true);
-  const [promptHidden, setPromptHidden] = useState(false);
-  const reopenPromptRef = useRef<HTMLButtonElement>(null);
   const revealPrompt = useCallback(() => {
-    setPromptHidden(false);
     requestAnimationFrame(() => promptRef.current?.focus());
   }, []);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -94,9 +89,13 @@ function StudioWorkspace() {
     useState<AgentRailComposerState>({
       disabled: false,
       awaitingApproval: false,
+      runActive: false,
+      runPhase: null,
+      threadHasMessages: false,
       editingSelection: false,
       conversationsOpen: false,
     });
+  const filmAction = resolveFilmAction(graph, agentComposerState);
   // One composer, not two: it sits in the centre dock until the conversation
   // panel opens, then moves into the panel so a thread is a back-and-forth.
   const composerInRail = agentComposerState.conversationsOpen;
@@ -229,64 +228,56 @@ function StudioWorkspace() {
 
   const composer = (
     <div className="studio-composer">
-      <div className="studio-composer-heading">
-        <span>
-          <Sparkles size={14} />
-          {briefOpen
-            ? "Develop your story"
-            : selectedAssets.length
-              ? `Refine ${selectedAssets.length === 1 ? selectedAssets[0].label : `${selectedAssets.length} assets`}`
-              : "Your creative partner"}
-        </span>
-        <div className="studio-composer-actions">
-          {selectedAssets.length > 0 ? (
-            <button onClick={() => select(null)}>
-              Clear selection <X size={12} />
-            </button>
-          ) : (
-            <span className="studio-composer-hint">
-              An idea. An edit. What happens next.
-            </span>
-          )}
-          {!composerInRail && (
-            <button
-              className="studio-hide-prompt"
-              aria-label="Hide prompt bar"
-              aria-expanded={true}
-              aria-controls="studio-prompt-dock"
-              title="Hide prompt bar"
-              onClick={() => {
-                setPromptHidden(true);
-                requestAnimationFrame(() => reopenPromptRef.current?.focus());
-              }}
-            >
-              <ChevronDown size={15} />
-            </button>
-          )}
-        </div>
-      </div>
+      {boardEmpty && (
+        <label className="studio-composer-title">
+          <span>Title</span>
+          <input
+            defaultValue={title === "Untitled film" ? "" : title}
+            placeholder="Name your film"
+            maxLength={80}
+            aria-label="Film title"
+            onBlur={(event) => void commitTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                (event.target as HTMLInputElement).blur();
+                promptRef.current?.focus();
+              }
+            }}
+          />
+        </label>
+      )}
       <PromptBar
         draftKey={`${projectId}:${selectedKeys.length ? [...selectedKeys].sort().join("|") : "film"}`}
         ref={promptRef}
         disabled={agentComposerState.disabled || !ready}
+        tone={agentComposerState.awaitingApproval ? "revision" : "default"}
         placeholder={
           agentComposerState.awaitingApproval
-            ? "Review the proposal in the conversation…"
-            : selectedAssets.length
-              ? "Describe what you’d like to change…"
-              : isNewVideo
-                ? "A film about…"
-                : "Where should the story go next?"
+            ? "What should change? Describe it and send."
+            : assetComposerPlaceholder(
+                selectedAssets,
+                isNewVideo
+                  ? "A film about…"
+                  : "Where should the story go next?",
+              )
         }
         suggestions={[]}
-        contexts={selectedAssets.map((asset) => ({
+        contexts={(selectedAssets.length > 1 &&
+        !agentComposerState.threadHasMessages
+          ? []
+          : selectedAssets
+        ).map((asset) => ({
           id: asset.key,
           label: asset.label,
           media: asset.media,
           onClear: () => select(asset.key, { additive: true }),
         }))}
         contextOptions={contextOptions}
-        allowExtras={!selectedAssets.some(isImageEditable)}
+        allowExtras={
+          !agentComposerState.awaitingApproval &&
+          !selectedAssets.some(isImageEditable)
+        }
         onUploadAttachment={(file) =>
           agentRailRef.current!.uploadAttachment(file)
         }
@@ -294,28 +285,6 @@ function StudioWorkspace() {
           agentRailRef.current?.submitPrompt(text, attachments)
         }
       />
-      <div className="studio-composer-footer">
-        <span>
-          <Link2 size={11} />
-          {selectedAssets.length
-            ? "Selected assets guide this revision"
-            : "Select cards to refine them together"}
-        </span>
-        {agentComposerState.awaitingApproval ? (
-          <button
-            onClick={() =>
-              agentRailRef.current?.openConversations({ current: true })
-            }
-          >
-            Review proposal <ArrowRight size={12} />
-          </button>
-        ) : (
-          <span>
-            <kbd>↵</kbd> Send <span className="studio-key-separator">·</span>
-            <kbd>⇧ ↵</kbd> New line
-          </span>
-        )}
-      </div>
     </div>
   );
 
@@ -365,25 +334,12 @@ function StudioWorkspace() {
             >
               <MessagesSquare size={17} />
             </button>
-            <button
-              className="studio-preview-button"
-              aria-label={
-                graph.overview?.finalVideoUrl ? "Preview film" : "Assemble film"
-              }
-              disabled={!ready}
-              onClick={() =>
-                graph.overview?.finalVideoUrl
-                  ? openPlayer(graph.overview.finalVideoUrl, title)
-                  : draft("Assemble the approved shots into a film.", true)
-              }
-            >
-              <Play size={13} fill="currentColor" />
-              <span>
-                {graph.overview?.finalVideoUrl
-                  ? "Preview film"
-                  : "Assemble film"}
+            {filmAction.kind === "running" && (
+              <span className="studio-run-pill" role="status">
+                <span className="cv-spin" aria-hidden="true" />
+                {filmAction.label}
               </span>
-            </button>
+            )}
           </div>
         </header>
         {(initError || saveError) && (
@@ -470,26 +426,10 @@ function StudioWorkspace() {
                 Opening your studio…
               </div>
             )}
-            {promptHidden && !composerInRail && (
-              <button
-                ref={reopenPromptRef}
-                className="studio-reopen-prompt"
-                onClick={revealPrompt}
-                aria-label="Show prompt bar"
-                aria-expanded={false}
-                aria-controls="studio-prompt-dock"
-                title="Show prompt bar · /"
-              >
-                <SquarePen size={14} />
-                <span>Prompt</span>
-                <kbd>/</kbd>
-              </button>
-            )}
             {!composerInRail && (
               <div
                 id="studio-prompt-dock"
                 className="project-prompt-dock agent-ui"
-                hidden={promptHidden}
                 aria-label="Creative conversation composer"
               >
                 {composer}
@@ -516,16 +456,13 @@ function StudioWorkspace() {
                 graph={graph}
                 version={mediaVersion}
                 busy={busy}
-                onRefine={(text) =>
-                  window.innerWidth <= 900
-                    ? agentRailRef.current?.draftSelection(text)
-                    : draft(text)
-                }
+                disabled={agentComposerState.disabled}
                 onAnnotate={setAnnotation}
-                onDiscuss={() => {
-                  agentRailRef.current?.startNewConversation();
-                  if (window.innerWidth > 900) revealPrompt();
-                }}
+                onFineTune={(asset, values) =>
+                  agentRailRef.current?.submitPrompt(
+                    fineTunePrompt(asset.label, values),
+                  )
+                }
               />
             }
           />

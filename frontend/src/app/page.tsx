@@ -57,13 +57,13 @@ const VIEW_COPY: Record<
 > = {
   recents: {
     title: "Recents",
-    subtitle: "Pick up where you left off.",
+    subtitle: "",
     empty: "Room for your next story.",
     hint: "Start a film with a character, a scene, or just an idea.",
   },
   drafts: {
     title: "Drafts",
-    subtitle: "Ideas taking shape, one scene at a time.",
+    subtitle: "",
     empty: "Every film starts with an idea.",
     hint: "Create a film and build its world on the canvas.",
   },
@@ -354,11 +354,13 @@ export default function Home() {
                   </button>
                 </div>
               )}
-              <p className="library-intro">
-                {query
-                  ? `${cards.length} ${cards.length === 1 ? "film" : "films"} matching “${query}”`
-                  : copy.subtitle}
-              </p>
+              {(query || copy.subtitle) && (
+                <p className="library-intro">
+                  {query
+                    ? `${cards.length} ${cards.length === 1 ? "film" : "films"} matching “${query}”`
+                    : copy.subtitle}
+                </p>
+              )}
               {cards.length ? (
                 <div className="library-grid">
                   {cards.map((card) => (
@@ -573,18 +575,10 @@ function FilmCardContent({ card }: { card: Card }) {
             <Film size={24} />
           </div>
         )}
-        <span className="library-film-type">
-          <Film size={10} />
-          {card.demo ? "Sample film" : "Film"}
-        </span>
-        <span className="library-open-hint">
-          <ArrowUpRight size={16} />
-        </span>
       </div>
       <div className="library-film-caption">
         <h2>{card.title}</h2>
         <p>{card.description}</p>
-        <span className="library-film-meta">{card.meta}</span>
       </div>
     </>
   );

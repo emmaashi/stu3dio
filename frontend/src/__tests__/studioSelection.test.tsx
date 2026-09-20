@@ -153,66 +153,94 @@ describe("Studio asset selection", () => {
   it("follows a shot's inherited scene and character context", () => {
     useStudioStore.getState().select("clip-shot-one");
     render(<AssetPanel graph={graph} version={0} busy={{}} />);
-    fireEvent.click(screen.getByText("Details & story context"));
-    fireEvent.click(
-      screen.getByRole("button", { name: /The Lead Character reference/ }),
-    );
+    expect(screen.getByText("Scene 1 · completed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scene 1" }));
+    expect(useStudioStore.getState().focusKey).toBe("scene-scene-one");
+    fireEvent.click(screen.getByRole("button", { name: "The Lead" }));
     expect(useStudioStore.getState().selectedKey).toBe("char-lead");
     expect(useStudioStore.getState().focusKey).toBe("char-lead");
   });
 
-  it("prepares an asset revision and opens annotation for the exact selected asset", () => {
-    const refine = vi.fn(),
-      annotate = vi.fn();
+  it("lets a character be drawn on, with no refine button or camera controls", () => {
+    const annotate = vi.fn();
     useStudioStore.getState().select("char-lead");
     render(
       <AssetPanel
         graph={graph}
         version={0}
         busy={{}}
-        onRefine={refine}
         onAnnotate={annotate}
+        onFineTune={vi.fn()}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Refine image" }));
-    expect(refine).toHaveBeenCalledWith("Refine The Lead: ");
-    fireEvent.click(screen.getByRole("button", { name: "Draw an edit" }));
+    expect(screen.getByText("Character")).toBeInTheDocument();
+    expect(screen.getByText("Observant")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Refine image" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Camera & visual direction" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Details & story context"),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Draw on The Lead" }));
     expect(annotate).toHaveBeenCalledWith(
       expect.objectContaining({
         key: "char-lead",
         media: "https://cdn.test/lead.png",
       }),
     );
-    expect(screen.queryByText("1024 × 1024")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scene 1" }));
+    expect(useStudioStore.getState().focusKey).toBe("scene-scene-one");
   });
 
-  it("offers a shot a conversation instead of the still-image tools", () => {
-    const discuss = vi.fn(),
-      refine = vi.fn();
+  it("shows a shot's direction once, with no still-image tools", () => {
     useStudioStore.getState().select("clip-shot-one");
+    render(
+      <AssetPanel graph={graph} version={0} busy={{}} onAnnotate={vi.fn()} />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /Draw on/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /New conversation/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getAllByText("Slow dolly toward the signal.")).toHaveLength(
+      1,
+    );
+    expect(screen.getByText("Shot direction")).toBeInTheDocument();
+  });
+
+  it("lets a scene propose a camera adjustment from a compact toggle", () => {
+    const fineTune = vi.fn();
+    useStudioStore.getState().select("scene-scene-one");
     render(
       <AssetPanel
         graph={graph}
         version={0}
         busy={{}}
-        onRefine={refine}
         onAnnotate={vi.fn()}
-        onDiscuss={discuss}
+        onFineTune={fineTune}
       />,
     );
     expect(
-      screen.queryByRole("button", { name: "Refine image" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Draw on Scene 1" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Draw an edit" }),
+      screen.queryByRole("button", { name: "Propose adjustment" }),
     ).not.toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: "New conversation about this shot" }),
+      screen.getByRole("button", { name: "Camera & visual direction" }),
     );
-    expect(discuss).toHaveBeenCalledWith(
-      expect.objectContaining({ key: "clip-shot-one" }),
+    fireEvent.click(screen.getByRole("button", { name: "Propose adjustment" }));
+    expect(fineTune).toHaveBeenCalledWith(
+      expect.objectContaining({ key: "scene-scene-one" }),
+      expect.objectContaining({
+        framing: "Cinematic wide",
+        camera: "Subtle dolly",
+      }),
     );
-    expect(refine).not.toHaveBeenCalled();
   });
 
   it("preserves the story brief draft and reports failed saves", async () => {
@@ -246,7 +274,7 @@ describe("Studio asset selection", () => {
     });
     view.rerender(<StoryBrief {...props} visible={false} />);
     expect(
-      screen.queryByRole("dialog", { name: "Story brief" }),
+      screen.queryByRole("dialog", { name: "Overview" }),
     ).not.toBeInTheDocument();
     view.rerender(<StoryBrief {...props} visible />);
     expect(screen.getByLabelText("Plot")).toHaveValue("A new ending.");
@@ -272,14 +300,14 @@ describe("Studio asset selection", () => {
     const opener = screen.getByRole("button", { name: "Open brief" });
     opener.focus();
     fireEvent.click(opener);
-    const dialog = screen.getByRole("dialog", { name: "Story brief" });
+    const dialog = screen.getByRole("dialog", { name: "Overview" });
     expect(dialog).toHaveFocus();
     expect(dialog).toHaveAttribute("aria-modal", "true");
     const concept = screen.getByRole("textbox", { name: "Concept" });
     fireEvent.change(concept, {
       target: { value: "A story worth continuing." },
     });
-    const close = screen.getByRole("button", { name: "Close story brief" });
+    const close = screen.getByRole("button", { name: "Close overview" });
     const save = screen.getByRole("button", { name: "Save brief" });
     close.focus();
     fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
@@ -325,9 +353,7 @@ describe("Studio asset selection", () => {
   it("shows only a brief reference in the conversation", () => {
     useStudioStore.getState().select("overview");
     render(<AssetPanel graph={graph} version={0} busy={{}} />);
-    expect(
-      screen.getByText("Working from your story brief"),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Working from your overview")).toBeInTheDocument();
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     expect(screen.queryByRole("tab")).not.toBeInTheDocument();
   });

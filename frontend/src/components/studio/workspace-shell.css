@@ -160,6 +160,36 @@
 .studio-preview-button:hover {
   background: #ded4f9;
 }
+/* Quiet header state while a run is in flight or paused for review. */
+.studio-run-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid #ffffff14;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+.studio-run-pill .cv-spin {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+button.studio-run-pill {
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+button.studio-run-pill:hover {
+  color: var(--ink);
+  border-color: #ffffff2a;
+}
 .studio-body {
   display: flex;
   min-height: 0;
@@ -240,6 +270,9 @@
   }
 }
 @media (max-width: 560px) {
+  .studio-run-pill {
+    display: none;
+  }
   .studio-header {
     height: 54px;
     min-height: 54px;

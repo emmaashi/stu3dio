@@ -9,9 +9,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ApprovalCard,
   ConversationNav,
+  FilmReadyCard,
+  InsightCards,
   LoadingState,
+  ProductionProgress,
   PromptBar,
+  ScenePlanField,
 } from "@/components/beautiful-ui";
+import { groupProductionTasks } from "@/lib/productionProgress";
 import { agentRunFixture } from "@/test/agentFixtures";
 
 describe("Beautiful UI production primitives", () => {
@@ -23,7 +28,6 @@ describe("Beautiful UI production primitives", () => {
       <ApprovalCard
         approval={agentRunFixture.approval!}
         onApprove={approve}
-        onRevise={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -36,13 +40,200 @@ describe("Beautiful UI production primitives", () => {
     );
   });
 
+  it("reports edited values so a revision typed elsewhere carries them", () => {
+    const onValuesChange = vi.fn();
+    render(
+      <ApprovalCard
+        approval={agentRunFixture.approval!}
+        onApprove={vi.fn()}
+        onCancel={vi.fn()}
+        onValuesChange={onValuesChange}
+      />,
+    );
+    fireEvent.change(screen.getByDisplayValue("Signal"), {
+      target: { value: "Signal from Tomorrow" },
+    });
+    expect(onValuesChange).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Signal from Tomorrow" }),
+    );
+    expect(
+      screen.queryByRole("button", { name: /request changes/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("adjusts planned shot counts and durations from the scene plan", () => {
+    const onChange = vi.fn();
+    render(
+      <ScenePlanField
+        id="plan"
+        scenes={[
+          {
+            id: "a",
+            title: "The bridge",
+            target_frames: 1,
+            duration: 8,
+            detailed_plot: "Open wide.",
+          },
+          {
+            id: "b",
+            title: "The hand",
+            target_frames: 3,
+            duration: 24,
+            detailed_plot: "Close in.",
+          },
+        ]}
+        onChange={onChange}
+      />,
+    );
+    expect(screen.getByText("2 scenes · 4 shots · 32s")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "More shots" })[0]);
+    expect(onChange).toHaveBeenCalledWith([
+      expect.objectContaining({ id: "a", target_frames: 2, duration: 16 }),
+      expect.objectContaining({ id: "b", target_frames: 3 }),
+    ]);
+    expect(
+      screen.getAllByRole("button", { name: "Fewer shots" })[0],
+    ).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /The hand/ }));
+    expect(screen.getByDisplayValue("Close in.")).toBeInTheDocument();
+  });
+
+  it("shows production progress as grouped counts, never percentages", () => {
+    const running = groupProductionTasks([
+      {
+        id: "c1",
+        label: "Design Thom",
+        phase: "assets",
+        job_type: "character-generation",
+        status: "completed",
+        progress: 100,
+      },
+      {
+        id: "video-batch",
+        label: "Render video clips",
+        phase: "videos",
+        job_type: "video-generation",
+        status: "running",
+        progress: 16,
+        completed: 3,
+        total: 19,
+      },
+    ]);
+    const { rerender } = render(<ProductionProgress groups={running} active />);
+    expect(screen.getByRole("button", { name: /Clips 3\/19/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText("Render video clips")).toBeInTheDocument();
+    expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+
+    const done = groupProductionTasks([
+      {
+        id: "c1",
+        label: "Design Thom",
+        phase: "assets",
+        job_type: "character-generation",
+        status: "completed",
+        progress: 100,
+      },
+      {
+        id: "video-batch",
+        label: "Render video clips",
+        phase: "videos",
+        job_type: "video-generation",
+        status: "completed",
+        progress: 100,
+        completed: 19,
+        total: 19,
+      },
+    ]);
+    rerender(
+      <ProductionProgress
+        groups={done}
+        active={false}
+        startedAt="2026-08-28T12:00:00.000Z"
+        finishedAt="2026-08-28T12:02:32.000Z"
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: /19 clips rendered/ });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("2:32")).toBeInTheDocument();
+
+    const failed = groupProductionTasks([
+      {
+        id: "bad",
+        label: "Design Celia",
+        phase: "assets",
+        job_type: "character-generation",
+        status: "failed",
+        progress: 0,
+        detail: "Provider timeout",
+      },
+    ]);
+    rerender(<ProductionProgress groups={failed} active={false} />);
+    expect(screen.getByText("Provider timeout")).toBeInTheDocument();
+  });
+
+  it("presents the finished film as a poster with one Play", () => {
+    const onPlay = vi.fn();
+    const data = {
+      title: "Your film is ready",
+      artifact_url: "https://cdn/final.mp4",
+      metrics: [
+        { label: "Clips", value: 19 },
+        { label: "Runtime", value: "152s" },
+        { label: "Format", value: "16:9" },
+      ],
+    };
+    const { container, rerender } = render(
+      <FilmReadyCard data={data} title="Tears of Steel" onPlay={onPlay} />,
+    );
+    expect(screen.getByText("19 clips · 2:32 · 16:9")).toBeInTheDocument();
+    expect(screen.getByText("Tears of Steel")).toBeInTheDocument();
+    expect(container.querySelector("video")).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Play film" })).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Play Tears of Steel" }),
+    );
+    expect(onPlay).toHaveBeenCalledTimes(1);
+    expect(onPlay).toHaveBeenCalledWith("https://cdn/final.mp4");
+    rerender(
+      <FilmReadyCard
+        data={data}
+        poster="https://cdn/poster.jpg"
+        onPlay={onPlay}
+      />,
+    );
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "https://cdn/poster.jpg",
+    );
+    expect(container.querySelector("video")).toBeNull();
+  });
+
+  it("renders a media-less insight as a single line", () => {
+    const { container } = render(
+      <InsightCards
+        data={{
+          title: "Production ready",
+          metrics: [
+            { label: "Scenes", value: 10 },
+            { label: "Clips", value: 19 },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByText("Production ready")).toBeInTheDocument();
+    expect(screen.getByText("10 scenes · 19 clips")).toBeInTheDocument();
+    expect(container.querySelector(".agent-insight__metrics")).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+  });
+
   it("locks approval actions while submitting", () => {
     render(
       <ApprovalCard
         approval={agentRunFixture.approval!}
         busy
         onApprove={vi.fn()}
-        onRevise={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -67,7 +258,6 @@ describe("Beautiful UI production primitives", () => {
           },
         }}
         onApprove={vi.fn()}
-        onRevise={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -106,7 +296,6 @@ describe("Beautiful UI production primitives", () => {
           values: { tones: [] },
         }}
         onApprove={approve}
-        onRevise={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -117,15 +306,13 @@ describe("Beautiful UI production primitives", () => {
 
   it("uploads prompt references and includes them on submit", async () => {
     const send = vi.fn();
-    const upload = vi
-      .fn()
-      .mockResolvedValue({
-        id: "ref-1",
-        name: "look.png",
-        url: "https://cdn.test/look.png",
-        mime_type: "image/png",
-        size: 12,
-      });
+    const upload = vi.fn().mockResolvedValue({
+      id: "ref-1",
+      name: "look.png",
+      url: "https://cdn.test/look.png",
+      mime_type: "image/png",
+      size: 12,
+    });
     const { container } = render(
       <PromptBar onUploadAttachment={upload} onSend={send} />,
     );
@@ -217,7 +404,6 @@ describe("Beautiful UI production primitives", () => {
           },
         ]}
         onClose={vi.fn()}
-        onNewConversation={vi.fn()}
         onSelect={select}
       />,
     );

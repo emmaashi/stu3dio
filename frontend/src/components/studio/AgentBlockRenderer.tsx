@@ -4,21 +4,24 @@ import {
   ArtifactCard,
   ContextCards,
   DiffTable,
+  FilmReadyCard,
   InsightCards,
   LoadingState,
+  ProductionProgress,
   RecommendationCard,
   StreamingText,
-  TaskRows,
   ThinkingState,
-  ToolChips,
 } from "@/components/beautiful-ui";
 
 export default function AgentBlockRenderer({
   block,
   busy,
   onApproval,
+  onApprovalValuesChange,
   onPlay,
   onRecommendation,
+  filmTitle,
+  filmPoster,
 }: {
   block: AgentBlock;
   busy: boolean;
@@ -27,8 +30,11 @@ export default function AgentBlockRenderer({
     values: Record<string, unknown>,
     feedback?: string,
   ) => void;
+  onApprovalValuesChange?: (values: Record<string, unknown>) => void;
   onPlay: (url: string) => void;
   onRecommendation: (id: string) => void;
+  filmTitle?: string;
+  filmPoster?: string;
 }) {
   switch (block.type) {
     case "loading":
@@ -61,16 +67,19 @@ export default function AgentBlockRenderer({
           approval={block.approval}
           busy={busy}
           onApprove={(values) => onApproval("approve", values)}
-          onRevise={(values, feedback) =>
-            onApproval("revise", values, feedback)
-          }
           onCancel={() => onApproval("cancel", block.approval.values)}
+          onValuesChange={onApprovalValuesChange}
         />
       );
-    case "tool-group":
-      return <ToolChips tools={block.tools} />;
-    case "task-group":
-      return <TaskRows tasks={block.tasks} />;
+    case "progress":
+      return (
+        <ProductionProgress
+          groups={block.groups}
+          active={block.active}
+          startedAt={block.startedAt}
+          finishedAt={block.finishedAt}
+        />
+      );
     case "context":
       return <ContextCards data={block.data} />;
     case "diff":
@@ -78,6 +87,15 @@ export default function AgentBlockRenderer({
     case "recommendation":
       return (
         <RecommendationCard data={block.data} onAction={onRecommendation} />
+      );
+    case "film-ready":
+      return (
+        <FilmReadyCard
+          data={block.data}
+          title={filmTitle}
+          poster={filmPoster}
+          onPlay={onPlay}
+        />
       );
     case "insight":
       return <InsightCards data={block.data} />;

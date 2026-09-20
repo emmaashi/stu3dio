@@ -126,11 +126,11 @@ export default function StoryBrief({
       >
         <header className="studio-brief-toolbar">
           <FileText size={15} />
-          <h2 id="story-brief-heading">Story brief</h2>
+          <h2 id="story-brief-heading">Overview</h2>
           <button
             className="studio-brief-close"
             onClick={onClose}
-            aria-label="Close story brief"
+            aria-label="Close overview"
             title="Close · Esc"
           >
             <X size={17} />

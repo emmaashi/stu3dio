@@ -23,17 +23,47 @@ import {
 import { projectApi, jobApi } from "@/utils/api";
 import { useBackendStore } from "@/store/backendStore";
 import { getDemo } from "@/films";
-import {
-  EMPTY_GRAPH,
-  type StudioGraph,
-  type Clip,
-} from "./types";
+import { EMPTY_GRAPH, type StudioGraph, type Clip } from "./types";
 
-import { buildStudioGraph } from "./studioGraph";
+import { buildStudioGraph, type ExpectedProduction } from "./studioGraph";
+import { useAgentRunStore } from "@/store/useAgentRunStore";
+import type { AgentRun } from "@/types/agent";
+
+// While an approved plan is being produced, the run knows exactly which cast,
+// scenes and shots are coming; the canvas draws those as skeletons until the
+// pipeline creates them.
+const PRODUCING_PHASES = new Set<AgentRun["phase"]>([
+  "assets",
+  "scenes",
+  "frames",
+  "videos",
+]);
+function expectedFromRun(
+  run: AgentRun | null,
+  projectId: string,
+): ExpectedProduction | null {
+  if (!run || run.project_id !== projectId) return null;
+  if (run.status !== "running" && run.status !== "thinking") return null;
+  if (run.phase === "assembly") return { assembling: true };
+  if (!PRODUCING_PHASES.has(run.phase)) return null;
+  const characters = run.concept?.characters;
+  const scenes = run.production_plan?.scenes;
+  return {
+    characters: Array.isArray(characters)
+      ? (characters as ExpectedProduction["characters"])
+      : [],
+    scenes: Array.isArray(scenes)
+      ? (scenes as ExpectedProduction["scenes"])
+      : [],
+  };
+}
 
 // Poll fairly briskly so the mock's staggered generation (cast -> scenes ->
 // shots) reveals smoothly rather than jumping in coarse batches.
 const POLL_MS = 1200;
+// Minimum time the assembling state (skeleton film node, glowing edges) stays
+// on screen once it has started, so a fast stitch still reads as an event.
+const ASSEMBLY_HOLD_MS = 1800;
 
 export type StudioActions = {
   sendDirector: (text: string) => Promise<void>;
@@ -42,10 +72,9 @@ export type StudioActions = {
   editAsset: (
     node: { key: string; refId?: string; media?: string },
     prompt: string,
-    compositeDataUrl?: string | null
+    compositeDataUrl?: string | null,
   ) => Promise<void>;
   generateFrameVideo: (clip: Clip) => Promise<void>;
-  assembleFilm: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -58,9 +87,11 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
   const [mediaVersion, setMediaVersion] = useState(0);
   const setStoreProjectId = useBackendStore((s) => s.setProjectId);
   const pollingRef = useRef(false);
+  // When assembly began, so the glow-and-skeleton beat lasts at least
+  // ASSEMBLY_HOLD_MS even if the cut lands faster (the offline mock does).
+  const assemblyStartedAt = useRef<number | null>(null);
 
-  const mark = (k: string, v: boolean) =>
-    setBusy((b) => ({ ...b, [k]: v }));
+  const mark = (k: string, v: boolean) => setBusy((b) => ({ ...b, [k]: v }));
 
   // --- project init ---
   useEffect(() => {
@@ -79,7 +110,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
       } catch (e) {
         if (!cancelled)
           setInitError(
-            e instanceof Error ? e.message : "Failed to load project"
+            e instanceof Error ? e.message : "Failed to load project",
           );
       } finally {
         if (!cancelled) setReady(true);
@@ -96,7 +127,11 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
     pollingRef.current = true;
     const cur = getCurrentProject();
     const baseOverview = cur
-      ? { title: cur.title || "Untitled", summary: cur.summary || "", plot: cur.plot || "" }
+      ? {
+          title: cur.title || "Untitled",
+          summary: cur.summary || "",
+          plot: cur.plot || "",
+        }
       : null;
     try {
       const status = await getCompleteProjectStatus();
@@ -115,11 +150,35 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
           /* ignore */
         }
       }
+      let expected = expectedFromRun(
+        useAgentRunStore.getState().run,
+        projectId,
+      );
+      const now = Date.now();
+      if (expected?.assembling) {
+        assemblyStartedAt.current ??= now;
+      } else if (
+        assemblyStartedAt.current !== null &&
+        finalVideoUrl &&
+        now - assemblyStartedAt.current < ASSEMBLY_HOLD_MS
+      ) {
+        // The cut arrived almost instantly: let the assembly animation finish
+        // its beat before the film card replaces the skeleton.
+        expected = { assembling: true };
+        finalVideoUrl = undefined;
+        window.setTimeout(
+          () => void poll(),
+          ASSEMBLY_HOLD_MS - (now - assemblyStartedAt.current) + 50,
+        );
+      } else {
+        assemblyStartedAt.current = null;
+      }
       setGraph(
         buildStudioGraph(
           status,
-          baseOverview ? { ...baseOverview, finalVideoUrl, poster } : null
-        )
+          baseOverview ? { ...baseOverview, finalVideoUrl, poster } : null,
+          expected,
+        ),
       );
     } catch {
       // Keep a usable overview node even if the pipeline call fails.
@@ -158,7 +217,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
       }
       return null;
     },
-    []
+    [],
   );
 
   // --- actions ---
@@ -177,7 +236,8 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
             resp.characters.length > 0
               ? resp.characters
                   .map(
-                    (character) => `${character.name} (${character.role}): ${character.description}`
+                    (character) =>
+                      `${character.name} (${character.role}): ${character.description}`,
                   )
                   .join("\n")
               : "";
@@ -202,41 +262,44 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
         mark("director", false);
       }
     },
-    [poll]
+    [poll],
   );
 
-  const enhanceAndGenerateScenes = useCallback(async (direction?: string) => {
-    mark("scenes", true);
-    try {
-      const cur = getCurrentProject();
-      if (!cur) throw new Error("No project");
-      let chars = getCurrentCharacters();
-      if (!chars.length) {
-        try {
-          chars = await loadCharacters();
-        } catch {
-          /* ignore */
-        }
-      }
-      const basePlot = cur.plot || cur.summary || "";
-      // The user's scene direction rides along in base_plot, which the backend's
-      // script enhancement feeds into the scene-breakdown prompt (and on into
-      // each scene's plot_context).
-      const dir = direction?.trim();
-      const plotForScenes = dir
-        ? `${basePlot}\n\nDirector's notes for the scenes:\n${dir}`
-        : basePlot;
+  const enhanceAndGenerateScenes = useCallback(
+    async (direction?: string) => {
+      mark("scenes", true);
       try {
-        await enhanceScript(plotForScenes, chars);
-      } catch (e) {
-        console.error("script enhancement failed", e);
+        const cur = getCurrentProject();
+        if (!cur) throw new Error("No project");
+        let chars = getCurrentCharacters();
+        if (!chars.length) {
+          try {
+            chars = await loadCharacters();
+          } catch {
+            /* ignore */
+          }
+        }
+        const basePlot = cur.plot || cur.summary || "";
+        // The user's scene direction rides along in base_plot, which the backend's
+        // script enhancement feeds into the scene-breakdown prompt (and on into
+        // each scene's plot_context).
+        const dir = direction?.trim();
+        const plotForScenes = dir
+          ? `${basePlot}\n\nDirector's notes for the scenes:\n${dir}`
+          : basePlot;
+        try {
+          await enhanceScript(plotForScenes, chars);
+        } catch (e) {
+          console.error("script enhancement failed", e);
+        }
+        await generateAllScenes();
+        await poll();
+      } finally {
+        mark("scenes", false);
       }
-      await generateAllScenes();
-      await poll();
-    } finally {
-      mark("scenes", false);
-    }
-  }, [poll]);
+    },
+    [poll],
+  );
 
   // Cast generation, split out of sendDirector so the user triggers it from the
   // step rail once they're happy with the concept.
@@ -256,7 +319,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
     async (
       node: { key: string; refId?: string; media?: string },
       prompt: string,
-      compositeDataUrl?: string | null
+      compositeDataUrl?: string | null,
     ) => {
       const cur = getCurrentProject();
       if (!cur) return;
@@ -268,7 +331,11 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
           project_id: cur.id,
           source_url: source,
           edit_prompt: prompt,
-          metadata: { source: "studio_canvas", node: node.key, refId: node.refId },
+          metadata: {
+            source: "studio_canvas",
+            node: node.key,
+            refId: node.refId,
+          },
         });
         await pollJobUntilDone(job_id);
         // The edit worker replaces the file at the same storage path, so the URL
@@ -279,7 +346,7 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
         mark(node.key, false);
       }
     },
-    [poll, pollJobUntilDone]
+    [poll, pollJobUntilDone],
   );
 
   const generateFrameVideo = useCallback(
@@ -301,30 +368,8 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
         mark(`clip-${clip.id}`, false);
       }
     },
-    [poll, pollJobUntilDone]
+    [poll, pollJobUntilDone],
   );
-
-  const assembleFilm = useCallback(async () => {
-    const cur = getCurrentProject();
-    if (!cur) return;
-    mark("film", true);
-    try {
-      const videoUrls = graph.scenes
-        .flatMap((s) => s.clips)
-        .filter((c) => c.status === "completed" && c.video_url)
-        .map((c) => c.video_url!) as string[];
-      if (videoUrls.length === 0) return;
-      const { job_id } = await jobApi.createVideoStitching({
-        project_id: cur.id,
-        video_urls: videoUrls,
-        output_name: (cur.title || "final").replace(/\s+/g, "_").toLowerCase(),
-      });
-      await pollJobUntilDone(job_id, 300000);
-      await poll();
-    } finally {
-      mark("film", false);
-    }
-  }, [graph, poll, pollJobUntilDone]);
 
   const actions: StudioActions = {
     sendDirector,
@@ -332,7 +377,6 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
     enhanceAndGenerateScenes,
     editAsset,
     generateFrameVideo,
-    assembleFilm,
     refresh: poll,
   };
 
@@ -340,7 +384,10 @@ export function useStudioPipeline(projectId: string, isDemo: boolean) {
 }
 
 // Append a cache-busting token to a media URL (skips data: URLs and blanks).
-export function bust(url: string | undefined, version: number): string | undefined {
+export function bust(
+  url: string | undefined,
+  version: number,
+): string | undefined {
   if (!url) return url;
   if (url.startsWith("data:")) return url;
   const sep = url.includes("?") ? "&" : "?";

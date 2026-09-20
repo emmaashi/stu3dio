@@ -1,12 +1,7 @@
 "use client";
 
 /** Adapted from Beautiful UI's Sidebar Nav (MIT): github.com/slev12397/beautiful-ui */
-import {
-  Clock3,
-  MessageSquareText,
-  PanelLeftClose,
-  SquarePen,
-} from "lucide-react";
+import { Clock3, MessageSquareText, PanelLeftClose } from "lucide-react";
 
 export type ConversationSummary = {
   id: string;
@@ -20,9 +15,7 @@ export function ConversationNav({
   activeId,
   conversations,
   mocked,
-  newConversationDisabled,
   onClose,
-  onNewConversation,
   onSelect,
 }: {
   open: boolean;
@@ -30,9 +23,7 @@ export function ConversationNav({
   activeId?: string;
   conversations: ConversationSummary[];
   mocked?: boolean;
-  newConversationDisabled?: boolean;
   onClose: () => void;
-  onNewConversation: () => void;
   onSelect: (id: string) => void;
 }) {
   return (
@@ -66,16 +57,6 @@ export function ConversationNav({
             </button>
           </div>
         )}
-
-        <button
-          type="button"
-          className="agent-conversation-nav__new"
-          onClick={onNewConversation}
-          disabled={newConversationDisabled}
-        >
-          <SquarePen size={15} />
-          <span>New conversation</span>
-        </button>
 
         <div className="agent-conversation-nav__section">
           <span>Recent</span>
