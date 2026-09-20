@@ -35,6 +35,7 @@ import {
   type RecentProject,
 } from "@/lib/recents";
 import WorkspaceBrand from "@/components/studio/WorkspaceBrand";
+import AccountMenu from "@/components/account/AccountMenu";
 import "./library.css";
 
 type View = "recents" | "drafts" | "trash";
@@ -299,6 +300,7 @@ export default function Home() {
                     </button>
                   ))}
                 </nav>
+                <AccountMenu />
               </aside>
             </>
           )}

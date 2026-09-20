@@ -28,6 +28,7 @@ import { filmPoster } from "./layout";
 import AgentBlockRenderer from "./AgentBlockRenderer";
 import ConversationTranscript from "./ConversationTranscript";
 import { assetComposerPlaceholder } from "./assetPrompts";
+import { runSettings } from "@/lib/settings";
 import { buildContextOptions } from "./studioContext";
 import { buildAgentRunContext, resolveAgentRunKind } from "./agentRunRequest";
 import {
@@ -341,6 +342,7 @@ const AgentRail = forwardRef<AgentRailHandle, Props>(function AgentRail(
       const snapshot = await agentApi.create(projectId, {
         prompt: text,
         kind: commandKind,
+        settings: runSettings(),
         context: buildAgentRunContext({
           graph,
           selectedAssets,
