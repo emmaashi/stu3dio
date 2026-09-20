@@ -54,11 +54,13 @@ export type PromptBarHandle = {
   setDraft: (text: string, scope?: string) => void;
 };
 
+const MAX_VISIBLE_CONTEXTS = 3;
 export function PromptBar({
   ref,
   draftKey = "default",
   disabled,
   hero,
+  tone = "default",
   placeholder = "Message the agent…",
   suggestions: starterSuggestions = [],
   context,
@@ -72,6 +74,8 @@ export function PromptBar({
   draftKey?: string;
   disabled?: boolean;
   hero?: boolean;
+  /** "revision" styles the text as a note on someone else's work. */
+  tone?: "default" | "revision";
   placeholder?: string;
   suggestions?: string[];
   context?: { label: string; onClear?: () => void };
@@ -107,6 +111,10 @@ export function PromptBar({
       [draftKey]:
         typeof update === "function" ? update(current[draftKey] || []) : update,
     }));
+  // Many linked assets collapse to the first few plus a "+N" pill, so the
+  // composer never buries the text field. The pill just says how many more.
+  const visibleContexts = contexts.slice(0, MAX_VISIBLE_CONTEXTS);
+  const hiddenContexts = contexts.slice(MAX_VISIBLE_CONTEXTS);
   const [menu, setMenu] = useState<Menu>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -240,7 +248,7 @@ export function PromptBar({
   return (
     <div
       ref={shell}
-      className={`agent-prompt-shell ${hero ? "agent-prompt-shell--hero" : ""}`}
+      className={`agent-prompt-shell ${hero ? "agent-prompt-shell--hero" : ""} ${tone === "revision" ? "agent-prompt-shell--revision" : ""}`}
     >
       {starterSuggestions.length > 0 && (
         <div
@@ -317,7 +325,7 @@ export function PromptBar({
                 )}
               </div>
             )}
-            {contexts.map((item) => (
+            {visibleContexts.map((item) => (
               <div
                 key={item.id}
                 className="agent-prompt-context agent-prompt-context--linked"
@@ -343,6 +351,15 @@ export function PromptBar({
                 )}
               </div>
             ))}
+            {hiddenContexts.length > 0 && (
+              <span
+                className="agent-prompt-context agent-prompt-more"
+                title={hiddenContexts.map((item) => item.label).join(", ")}
+                aria-label={`${hiddenContexts.length} more linked assets: ${hiddenContexts.map((item) => item.label).join(", ")}`}
+              >
+                <span>+{hiddenContexts.length}</span>
+              </span>
+            )}
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}

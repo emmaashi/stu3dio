@@ -168,4 +168,38 @@ describe("Unified studio conversations", () => {
       saved.find((item: { id: string }) => item.id === "newer").messages,
     ).toHaveLength(1);
   });
+
+  it("tells the workspace whether a run is active and which phase it is in", async () => {
+    const onComposerStateChange = vi.fn();
+    render(
+      <AgentRail {...props()} onComposerStateChange={onComposerStateChange} />,
+    );
+    act(() => useAgentRunStore.getState().hydrate(agentRunFixture));
+    await waitFor(() =>
+      expect(onComposerStateChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          awaitingApproval: true,
+          runActive: false,
+          runPhase: "concept",
+        }),
+      ),
+    );
+    act(() =>
+      useAgentRunStore.getState().hydrate({
+        ...agentRunFixture,
+        status: "running",
+        phase: "assembly",
+        approval: undefined,
+      }),
+    );
+    await waitFor(() =>
+      expect(onComposerStateChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          awaitingApproval: false,
+          runActive: true,
+          runPhase: "assembly",
+        }),
+      ),
+    );
+  });
 });

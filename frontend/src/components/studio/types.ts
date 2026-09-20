@@ -13,6 +13,8 @@ export type Clip = {
   video_url?: string;
   image_url?: string;
   label: string;
+  // Planned but not yet created by the backend; drawn as a skeleton card.
+  skeleton?: boolean;
   // raw frame metadata (veo3_prompt, dialogue, summary, ...) for the Asset panel
   meta?: Record<string, any>;
 };
@@ -23,6 +25,7 @@ export type SceneN = {
   plot: string;
   media?: string;
   loading?: boolean;
+  skeleton?: boolean;
   clips: Clip[];
   // Character ids that appear in this scene, used to draw cast -> scene edges.
   castIds?: string[];
@@ -35,6 +38,7 @@ export type CharN = {
   role: string;
   media?: string;
   loading?: boolean;
+  skeleton?: boolean;
   meta?: Record<string, any>;
 };
 
@@ -60,6 +64,9 @@ export type StudioGraph = {
   scenes: SceneN[];
   complete: boolean;
   hasProject: boolean;
+  // The final cut is being stitched right now: the film node is drawn as a
+  // skeleton and every shot's edge into it glows.
+  assembling?: boolean;
 };
 
 export const EMPTY_GRAPH: StudioGraph = {
@@ -87,6 +94,7 @@ export type GNode = {
   status?: ClipStatus;
   ready?: boolean;
   loading?: boolean;
+  skeleton?: boolean;
   // pointer back to the source entity so panels can resolve full detail
   refId?: string;
 };
@@ -98,6 +106,8 @@ export type GEdge = {
   source: string;
   target: string;
   dir: "h" | "v";
+  // Animated glow: work is flowing along this edge right now.
+  flow?: boolean;
 };
 
 // Resolve the source entity for a selected node key.
@@ -123,11 +133,13 @@ export type AssetSelection = {
 
 export function resolveSelected(
   graph: StudioGraph,
-  key: string | null
+  key: string | null,
 ): SelectedDetail {
   if (!key) return null;
   if (key === "overview") {
-    return graph.overview ? { kind: "overview", overview: graph.overview } : null;
+    return graph.overview
+      ? { kind: "overview", overview: graph.overview }
+      : null;
   }
   if (key === "film") {
     return { kind: "film", overview: graph.overview };
@@ -154,7 +166,7 @@ export function resolveSelected(
 
 export function resolveAssetSelection(
   graph: StudioGraph,
-  key: string
+  key: string,
 ): AssetSelection | null {
   const detail = resolveSelected(graph, key);
   if (!detail) return null;
@@ -163,7 +175,11 @@ export function resolveAssetSelection(
     const character = detail.character;
     const usedIn = graph.scenes.filter((scene) => {
       if (scene.castIds?.includes(character.id)) return true;
-      const searchable = [scene.plot, scene.meta?.detailed_plot, scene.meta?.concise_plot]
+      const searchable = [
+        scene.plot,
+        scene.meta?.detailed_plot,
+        scene.meta?.concise_plot,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -174,7 +190,9 @@ export function resolveAssetSelection(
       id: character.id,
       kind: "character",
       label: character.name,
-      description: character.meta?.description || `${character.name} is part of the film's cast.`,
+      description:
+        character.meta?.description ||
+        `${character.name} is part of the film's cast.`,
       usage: usedIn.length
         ? `Used in ${usedIn.length} ${usedIn.length === 1 ? "scene" : "scenes"}: ${usedIn.map((scene) => `Scene ${scene.order}`).join(", ")}.`
         : "Available to every scene through the project’s inherited cast context.",
@@ -192,13 +210,18 @@ export function resolveAssetSelection(
 
   if (detail.kind === "scene") {
     const scene = detail.scene;
-    const cast = graph.characters.filter((character) => scene.castIds?.includes(character.id));
+    const cast = graph.characters.filter((character) =>
+      scene.castIds?.includes(character.id),
+    );
     return {
       key,
       id: scene.id,
       kind: "scene",
       label: `Scene ${scene.order}`,
-      description: scene.meta?.detailed_plot || scene.plot || `Scene ${scene.order} of the film.`,
+      description:
+        scene.meta?.detailed_plot ||
+        scene.plot ||
+        `Scene ${scene.order} of the film.`,
       usage: `${scene.clips.length} ${scene.clips.length === 1 ? "shot" : "shots"}${cast.length ? ` · Cast: ${cast.map((character) => character.name).join(", ")}` : ""}.`,
       media: scene.media,
       editable: !!scene.media,
@@ -245,7 +268,10 @@ export function resolveAssetSelection(
       id: "film",
       kind: "film",
       label: "Final film",
-      description: detail.overview?.summary || detail.overview?.plot || "The assembled film.",
+      description:
+        detail.overview?.summary ||
+        detail.overview?.plot ||
+        "The assembled film.",
       usage: `${graph.scenes.length} scenes · ${clips.length} clips${detail.overview?.finalVideoUrl ? " · Final cut available." : " · Awaiting assembly."}`,
       media: detail.overview?.poster,
       editable: false,
@@ -265,7 +291,10 @@ export function resolveAssetSelection(
     id: "overview",
     kind: "overview",
     label: detail.overview.title || "Project overview",
-    description: detail.overview.summary || detail.overview.plot || "The film’s creative foundation.",
+    description:
+      detail.overview.summary ||
+      detail.overview.plot ||
+      "The film’s creative foundation.",
     usage: "Inherited by cast, scenes, shots, and final assembly.",
     media: detail.overview.poster,
     editable: false,

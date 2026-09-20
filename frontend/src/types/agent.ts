@@ -1,3 +1,5 @@
+import type { TaskGroup } from "@/lib/productionProgress";
+
 export type AgentRunKind =
   | "create-film"
   | "regenerate"
@@ -31,7 +33,14 @@ export type AgentRunPhase =
 export type AgentApprovalField = {
   id: string;
   label: string;
-  type: "text" | "textarea" | "single-select" | "multi-select" | "number" | "summary-list" | "scene-plan";
+  type:
+    | "text"
+    | "textarea"
+    | "single-select"
+    | "multi-select"
+    | "number"
+    | "summary-list"
+    | "scene-plan";
   required?: boolean;
   options?: Array<string | number>;
 };
@@ -57,6 +66,9 @@ export type AgentTask = {
   progress: number;
   detail?: string;
   output?: Record<string, unknown>;
+  /** Batch tasks (one job standing for many units) report their own counts. */
+  completed?: number;
+  total?: number;
 };
 
 export type AgentRun = {
@@ -110,14 +122,33 @@ export type AgentActivity = {
 
 export type AgentBlock =
   | { id: string; type: "loading"; label: string; startedAt: string }
-  | { id: string; type: "thinking"; label: string; activities: AgentActivity[]; active: boolean }
-  | { id: string; type: "streaming-message"; role: "user" | "assistant"; content: string; status: "streaming" | "completed" | "interrupted" }
+  | {
+      id: string;
+      type: "thinking";
+      label: string;
+      activities: AgentActivity[];
+      active: boolean;
+    }
+  | {
+      id: string;
+      type: "streaming-message";
+      role: "user" | "assistant";
+      content: string;
+      status: "streaming" | "completed" | "interrupted";
+    }
   | { id: string; type: "approval"; approval: AgentApproval }
-  | { id: string; type: "tool-group"; tools: AgentTask[] }
-  | { id: string; type: "task-group"; tasks: AgentTask[] }
+  | {
+      id: string;
+      type: "progress";
+      groups: TaskGroup[];
+      active: boolean;
+      startedAt?: string;
+      finishedAt?: string;
+    }
   | { id: string; type: "recommendation"; data: Record<string, unknown> }
   | { id: string; type: "context"; data: Record<string, unknown> }
   | { id: string; type: "diff"; data: Record<string, unknown> }
   | { id: string; type: "insight"; data: Record<string, unknown> }
+  | { id: string; type: "film-ready"; data: Record<string, unknown> }
   | { id: string; type: "artifact"; data: Record<string, unknown> }
   | { id: string; type: "error"; message: string; retryable: boolean };

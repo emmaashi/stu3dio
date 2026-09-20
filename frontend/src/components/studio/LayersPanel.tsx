@@ -43,14 +43,14 @@ export default function LayersPanel({
         )}
       </label>
       <div className="studio-layer-scroll">
-        {(!query || matches("story brief")) && (
+        {(!query || matches("overview")) && (
           <button
             className={`studio-layer-brief ${selectedKeys.includes("overview") ? "is-selected" : ""}`}
             onClick={() => select("overview")}
           >
             <FileText size={15} />
             <span>
-              Story brief<small>The foundation of your film</small>
+              Overview<small>The foundation of your film</small>
             </span>
           </button>
         )}
@@ -173,7 +173,7 @@ export default function LayersPanel({
             >
               <Film size={15} />
               <span>
-                Final film<small>Preview your assembled story</small>
+                Final film<small>Your assembled cut</small>
               </span>
             </button>
           )}

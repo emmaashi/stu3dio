@@ -211,7 +211,7 @@ describe("Drawing editor", () => {
     );
     expect(prompt).toHaveValue("Weather the mask.\nKeep the silhouette.");
     expect(screen.getByRole("button", { name: "Undo drawing" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: "Apply edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     await waitFor(() => expect(onApply).toHaveBeenCalledTimes(2));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -231,7 +231,7 @@ describe("Drawing editor", () => {
     );
     loadImage();
     draw();
-    fireEvent.click(screen.getByRole("button", { name: "Apply edit" }));
+    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
     expect(screen.getByRole("alert")).toHaveTextContent(
       "Couldn’t include your drawing",
     );

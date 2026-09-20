@@ -11,15 +11,12 @@ type StudioUIState = {
   focusNonce: number;
   frameMode: "image" | "video";
   player: { src: string; title: string } | null;
-  finalizeOpen: boolean;
   select: (key: string | null, options?: { additive?: boolean }) => void;
   setSelection: (keys: string[]) => void;
   focus: (key: string, options?: { additive?: boolean }) => void;
   setFrameMode: (m: "image" | "video") => void;
   openPlayer: (src: string, title: string) => void;
   closePlayer: () => void;
-  openFinalize: () => void;
-  closeFinalize: () => void;
 };
 
 export const useStudioStore = create<StudioUIState>((set) => ({
@@ -29,7 +26,6 @@ export const useStudioStore = create<StudioUIState>((set) => ({
   focusNonce: 0,
   frameMode: "image",
   player: null,
-  finalizeOpen: false,
   select: (key, options) =>
     set((state) => {
       if (!key) return { selectedKey: null, selectedKeys: [] };
@@ -72,6 +68,4 @@ export const useStudioStore = create<StudioUIState>((set) => ({
   setFrameMode: (m) => set({ frameMode: m }),
   openPlayer: (src, title) => set({ player: { src, title } }),
   closePlayer: () => set({ player: null }),
-  openFinalize: () => set({ finalizeOpen: true }),
-  closeFinalize: () => set({ finalizeOpen: false }),
 }));

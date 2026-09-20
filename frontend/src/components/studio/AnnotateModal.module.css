@@ -79,22 +79,9 @@
 }
 .footer {
   flex-shrink: 0;
-  padding: 14px 16px 16px;
+  padding: 12px 14px 14px;
   border-top: 1px solid #ffffff0b;
   background: #202023;
-}
-.promptLabel {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 10px;
-  color: #c1b1ce;
-  margin-bottom: 10px;
-}
-.promptLabel span {
-  color: #83768f;
-  font-size: 9px;
 }
 .composer {
   display: flex;
@@ -102,8 +89,8 @@
   align-items: flex-end;
   background: #18181b;
   border: 1px solid #ffffff10;
-  border-radius: 7px;
-  padding: 10px;
+  border-radius: 9px;
+  padding: 8px 8px 8px 10px;
 }
 .composer:focus-within {
   border-color: #c1b2f245;
@@ -130,15 +117,15 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  gap: 7px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #d5c5ef;
-  border-radius: 5px;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
   background: #c6b2eb;
   color: #30243e;
   font-size: 11px;
-  font-weight: 550;
+  font-weight: 600;
   cursor: pointer;
 }
 .apply:hover:not(:disabled) {
@@ -178,11 +165,6 @@
   }
   .footer {
     padding: 12px;
-  }
-  .promptLabel {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
   }
   .composer {
     flex-wrap: wrap;

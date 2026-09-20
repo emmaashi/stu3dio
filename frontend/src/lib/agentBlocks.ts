@@ -1,4 +1,5 @@
 import type { AgentActivity, AgentBlock, AgentEvent, AgentRun, AgentTask } from "@/types/agent";
+import { groupProductionTasks } from "./productionProgress";
 
 export function buildAgentBlocks(run: AgentRun | null, events: AgentEvent[]): AgentBlock[] {
   if (!run) return [];
@@ -8,8 +9,14 @@ export function buildAgentBlocks(run: AgentRun | null, events: AgentEvent[]): Ag
   const special: AgentBlock[] = [];
   const syntheticTasks = new Map<string, AgentTask>();
   const resolvedApprovalIds = new Set<string>();
+  let firstTaskAt: string | undefined;
+  let lastTaskAt: string | undefined;
 
   for (const event of events) {
+    if (event.type.startsWith("task.")) {
+      firstTaskAt ??= event.timestamp;
+      lastTaskAt = event.timestamp;
+    }
     if (event.type === "message.started") {
       messages.set(String(event.data.id), { role: (event.data.role as "user" | "assistant") || "assistant", content: "", completed: false });
     } else if (event.type === "message.delta") {
@@ -48,11 +55,14 @@ export function buildAgentBlocks(run: AgentRun | null, events: AgentEvent[]): Ag
         });
       }
     } else if (event.type === "insight.created") {
-      const previousInsight = special.findIndex((block) => block.type === "insight");
+      // One milestone slot: a later insight replaces the earlier one, and an
+      // insight that carries the finished film becomes the film card.
+      const previousInsight = special.findIndex((block) => block.type === "insight" || block.type === "film-ready");
       if (previousInsight >= 0) special.splice(previousInsight, 1);
-      special.push({ id: `insight-${event.id}`, type: "insight", data: event.data });
+      const hasFilm = typeof event.data.artifact_url === "string" && event.data.artifact_url.trim().length > 0;
+      special.push({ id: `insight-${event.id}`, type: hasFilm ? "film-ready" : "insight", data: event.data });
     } else if (event.type === "task.progress" && event.data.id === "video-batch") {
-      syntheticTasks.set("video-batch", event.data as unknown as AgentTask);
+      syntheticTasks.set("video-batch", event.data as AgentTask);
     } else if (event.type === "approval.resolved") {
       resolvedApprovalIds.add(String(event.data.id));
     }
@@ -86,12 +96,27 @@ export function buildAgentBlocks(run: AgentRun | null, events: AgentEvent[]): Ag
   }
 
   const tasks = mergeTasks(run.tasks, [...syntheticTasks.values()]);
-  if (tasks.length) {
-    blocks.push({ id: "run-tools", type: "tool-group", tools: tasks });
-    blocks.push({ id: "run-tasks", type: "task-group", tasks });
+  const groups = groupProductionTasks(tasks);
+  if (groups.length) {
+    const active = ["queued", "thinking", "running"].includes(run.status);
+    blocks.push({
+      id: "run-progress",
+      type: "progress",
+      groups,
+      active,
+      startedAt: firstTaskAt,
+      finishedAt: active ? undefined : lastTaskAt
+    });
   }
   blocks.push(...special);
-  for (const artifact of run.artifacts) blocks.push({ id: `artifact-${String(artifact.id)}`, type: "artifact", data: artifact });
+  // The film card already offers playback; don't list the same video again.
+  const filmReady = special.find((block) => block.type === "film-ready");
+  const filmUrl = filmReady?.type === "film-ready" ? String(filmReady.data.artifact_url) : null;
+  for (const artifact of run.artifacts) {
+    const artifactUrl = String(artifact.url || artifact.video_url || "");
+    if (filmUrl && artifactUrl && artifactUrl === filmUrl) continue;
+    blocks.push({ id: `artifact-${String(artifact.id)}`, type: "artifact", data: artifact });
+  }
   if (run.approval?.status === "pending" && !resolvedApprovalIds.has(run.approval.id)) {
     blocks.push({ id: `approval-${run.approval.id}`, type: "approval", approval: run.approval });
   }

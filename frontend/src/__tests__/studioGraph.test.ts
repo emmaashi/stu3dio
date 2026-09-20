@@ -3,6 +3,7 @@ import {
   buildStudioGraph,
   type StudioPipelineStatus,
 } from "@/components/studio/studioGraph";
+import { buildLayout } from "@/components/studio/layout";
 
 const overview = {
   title: "Signal",
@@ -21,6 +22,7 @@ describe("Studio graph adapter", () => {
         scenes: [],
         complete: false,
         hasProject: true,
+        assembling: false,
       });
     },
   );
@@ -215,5 +217,74 @@ describe("Studio graph adapter", () => {
       buildStudioGraph({ frames: [{ video_url: "/orphan.mp4" }] }, overview)
         .complete,
     ).toBe(false);
+  });
+
+  it("draws planned cast and scenes as skeletons until the pipeline creates them", () => {
+    const status: StudioPipelineStatus = {
+      characters: [
+        { id: "thom", media_url: "thom.jpg", metadata: { name: "Thom" } },
+      ],
+      scenes: [{ id: "s1", media_url: "s1.jpg", metadata: { scene_order: 1 } }],
+      frames: [{ id: "f1", scene_id: "s1", video_url: "f1.mp4" }],
+    };
+    const graph = buildStudioGraph(status, overview, {
+      characters: [
+        { name: "thom", role: "Lead" },
+        { name: "Celia", role: "Roboticist" },
+      ],
+      scenes: [
+        { scene_order: 1, title: "The bridge", target_frames: 1 },
+        { scene_order: 2, title: "The hand", target_frames: 3 },
+      ],
+    });
+    expect(graph.characters.map((c) => [c.name, !!c.skeleton])).toEqual([
+      ["Thom", false],
+      ["Celia", true],
+    ]);
+    expect(
+      graph.scenes.map((s) => [s.order, !!s.skeleton, s.clips.length]),
+    ).toEqual([
+      [1, false, 1],
+      [2, true, 3],
+    ]);
+    expect(graph.scenes[1].clips.every((clip) => clip.skeleton)).toBe(true);
+    expect(graph.complete).toBe(false);
+  });
+
+  it("ignores the plan once nothing is expected", () => {
+    const status: StudioPipelineStatus = {
+      scenes: [{ id: "s1", metadata: { scene_order: 1 } }],
+      frames: [{ id: "f1", scene_id: "s1", video_url: "f1.mp4" }],
+    };
+    expect(buildStudioGraph(status, overview, null).complete).toBe(true);
+  });
+
+  it("draws a skeleton film node with glowing edges while the cut is assembled", () => {
+    const status: StudioPipelineStatus = {
+      scenes: [{ id: "s1", media_url: "s1.jpg", metadata: { scene_order: 1 } }],
+      frames: [
+        { id: "f1", scene_id: "s1", media_url: "f1.jpg", video_url: "f1.mp4" },
+      ],
+    };
+    const graph = buildStudioGraph(status, overview, { assembling: true });
+    expect(graph.assembling).toBe(true);
+    const layout = buildLayout(graph);
+    expect(layout.nodes.find((node) => node.kind === "film")?.skeleton).toBe(
+      true,
+    );
+    const intoFilm = layout.edges.filter((edge) => edge.target === "film");
+    expect(intoFilm).toHaveLength(1);
+    expect(intoFilm.every((edge) => edge.flow && edge.on)).toBe(true);
+
+    const done = buildStudioGraph(
+      status,
+      { ...overview, finalVideoUrl: "final.mp4" },
+      { assembling: true },
+    );
+    expect(done.assembling).toBe(false);
+    expect(
+      buildLayout(done).nodes.find((node) => node.kind === "film")?.skeleton,
+    ).toBe(false);
+    expect(buildLayout(done).edges.some((edge) => edge.flow)).toBe(false);
   });
 });

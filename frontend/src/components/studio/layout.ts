@@ -35,6 +35,16 @@ export const clamp = (v: number, lo: number, hi: number) =>
 
 export type Lane = { key: string; label: string; top: number; height: number };
 
+// Use a representative scene/shot still while in progress; only show the
+// explicit poster once the film is actually complete, so a brand-new film
+// never inherits a stale/seeded poster.
+export function filmPoster(graph: StudioGraph): string | undefined {
+  const firstStill =
+    graph.scenes.find((s) => s.media)?.media ||
+    graph.scenes.flatMap((s) => s.clips).find((c) => c.image_url)?.image_url;
+  return graph.complete ? graph.overview?.poster || firstStill : firstStill;
+}
+
 export function buildLayout(graph: StudioGraph) {
   const nodes: GNode[] = [];
   const edges: GEdge[] = [];
@@ -42,11 +52,15 @@ export function buildLayout(graph: StudioGraph) {
   const hasChars = graph.characters.length > 0;
   const hasScenes = graph.scenes.length > 0;
   const hasClips = graph.scenes.some((s) => s.clips.length > 0);
-  // The Final film node appears only once the film has actually been generated
-  // (the user runs it from the final-film popup), not just because scenes exist.
-  const showFilm = !!graph.overview?.finalVideoUrl;
+  // The Final film node appears once the film exists, or while it is being
+  // assembled (as a skeleton the shots visibly flow into).
+  const assembling = !!graph.assembling && !graph.overview?.finalVideoUrl;
+  const showFilm = !!graph.overview?.finalVideoUrl || assembling;
 
-  const maxClips = graph.scenes.reduce((m, s) => Math.max(m, s.clips.length), 0);
+  const maxClips = graph.scenes.reduce(
+    (m, s) => Math.max(m, s.clips.length),
+    0,
+  );
   const clipDepth = Math.max(1, maxClips) * (BR_H + ROW_GAP);
 
   // Vertical bands stack top-to-bottom; only stages that have content take up
@@ -59,22 +73,42 @@ export function buildLayout(graph: StudioGraph) {
   let filmY = 0;
   if (hasChars) {
     castY = y;
-    lanes.push({ key: "cast", label: "Cast", top: castY - 28, height: CH + 56 });
+    lanes.push({
+      key: "cast",
+      label: "Cast",
+      top: castY - 28,
+      height: CH + 56,
+    });
     y += CH + BAND_GAP;
   }
   if (hasScenes) {
     spineY = y;
-    lanes.push({ key: "story", label: "Story", top: spineY - 28, height: SPINE_H + 56 });
+    lanes.push({
+      key: "story",
+      label: "Story",
+      top: spineY - 28,
+      height: SPINE_H + 56,
+    });
     y += SPINE_H + BAND_GAP;
   }
   if (hasClips) {
     shotsTop = y;
-    lanes.push({ key: "shots", label: "Shots", top: shotsTop - 28, height: clipDepth + 36 });
+    lanes.push({
+      key: "shots",
+      label: "Shots",
+      top: shotsTop - 28,
+      height: clipDepth + 36,
+    });
     y += clipDepth + BAND_GAP;
   }
   if (showFilm) {
     filmY = y;
-    lanes.push({ key: "film", label: "Final film", top: filmY - 28, height: FILM_H + 56 });
+    lanes.push({
+      key: "film",
+      label: "Final film",
+      top: filmY - 28,
+      height: FILM_H + 56,
+    });
     y += FILM_H + BAND_GAP;
   }
 
@@ -94,7 +128,7 @@ export function buildLayout(graph: StudioGraph) {
       dir: "h",
     });
   };
-  const down = (a: GNode, b: GNode, on: boolean) => {
+  const down = (a: GNode, b: GNode, on: boolean, flowing = false) => {
     const ax = a.x + a.w / 2,
       ay = a.y + a.h,
       bx = b.x + b.w / 2,
@@ -107,6 +141,7 @@ export function buildLayout(graph: StudioGraph) {
       source: a.key,
       target: b.key,
       dir: "v",
+      flow: flowing,
     });
   };
 
@@ -124,12 +159,17 @@ export function buildLayout(graph: StudioGraph) {
     media: s.media,
     ready: !!s.media,
     loading: s.loading,
+    skeleton: s.skeleton,
     refId: s.id,
   }));
   nodes.push(...sceneNodes);
 
   for (let i = 1; i < sceneNodes.length; i++) {
-    flow(sceneNodes[i - 1], sceneNodes[i], !!sceneNodes[i - 1].ready && !!sceneNodes[i].ready);
+    flow(
+      sceneNodes[i - 1],
+      sceneNodes[i],
+      !!sceneNodes[i - 1].ready && !!sceneNodes[i].ready,
+    );
   }
 
   // ---- CAST: characters above, each feeding every scene they appear in ----
@@ -158,6 +198,7 @@ export function buildLayout(graph: StudioGraph) {
       media: c.media,
       ready: !!c.media,
       loading: c.loading,
+      skeleton: c.skeleton,
       refId: c.id,
     };
     nodes.push(n);
@@ -187,6 +228,7 @@ export function buildLayout(graph: StudioGraph) {
         media: clip.image_url,
         video: clip.video_url,
         status: clip.status,
+        skeleton: clip.skeleton,
         refId: clip.id,
       };
       nodes.push(n);
@@ -202,15 +244,6 @@ export function buildLayout(graph: StudioGraph) {
   let film: GNode | null = null;
   if (showFilm) {
     const centerX = (LEFT_PAD + spineRight) / 2;
-    // Use a representative scene/shot still while in progress; only show the
-    // explicit poster once the film is actually complete, so a brand-new film
-    // never inherits a stale/seeded poster.
-    const firstStill =
-      graph.scenes.find((s) => s.media)?.media ||
-      graph.scenes.flatMap((s) => s.clips).find((c) => c.image_url)?.image_url;
-    const filmPoster = graph.complete
-      ? graph.overview?.poster || firstStill
-      : firstStill;
     film = {
       key: "film",
       kind: "film",
@@ -220,13 +253,20 @@ export function buildLayout(graph: StudioGraph) {
       w: FILM_W,
       h: FILM_H,
       title: "Final film",
-      media: filmPoster,
+      label: assembling ? "Stitching the shots together…" : undefined,
+      media: assembling ? undefined : filmPoster(graph),
       video: graph.overview?.finalVideoUrl,
       ready: graph.complete,
+      skeleton: assembling,
     };
     nodes.push(film);
     sceneNodes.forEach((sn, si) =>
-      down(lastShotByScene[si] || sn, film!, graph.complete)
+      down(
+        lastShotByScene[si] || sn,
+        film!,
+        graph.complete || assembling,
+        assembling,
+      ),
     );
   }
 
