@@ -1056,18 +1056,14 @@
   position: absolute;
   right: 10px;
   bottom: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 11px 0 9px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
   border: 0;
   border-radius: 8px;
   color: #1d1727;
   background: #f1edf7;
-  font-size: 11px;
-  font-weight: 650;
-  letter-spacing: 0.1px;
   box-shadow:
     0 6px 18px #0006,
     0 0 0 1px #ffffff22;
